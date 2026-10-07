@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>墨課使用說明書</title>
+<style>
+  :root { --ink:#1a1a2e; --muted:#5a5a6e; --line:#e2e2ec; --bg:#f7f7fb; --card:#fff; --accent:#1971c2; --green:#2b8a3e; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:"PingFang TC","Microsoft JhengHei",sans-serif; line-height:1.75; }
+  .wrap { max-width:860px; margin:0 auto; padding:32px 20px 80px; }
+  header { text-align:center; margin-bottom:36px; }
+  header h1 { font-size:34px; margin:0 0 8px; }
+  header p { color:var(--muted); margin:0; }
+  .toc { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px 24px; margin-bottom:32px; }
+  .toc a { color:var(--accent); text-decoration:none; }
+  .toc li { margin:4px 0; }
+  h2 { font-size:24px; margin:44px 0 16px; padding-bottom:8px; border-bottom:2px solid var(--ink); }
+  .btn-card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px 18px; margin:12px 0; }
+  .btn-card .name { font-size:17px; font-weight:700; }
+  .btn-card .name .icon { display:inline-block; min-width:34px; text-align:center; background:#f0f0f6; border-radius:6px; padding:2px 6px; margin-right:8px; font-size:16px; }
+  .btn-card p { margin:8px 0 0; color:var(--muted); font-size:15px; }
+  .btn-card p b { color:var(--ink); }
+  .tip { background:#fff9db; border-left:4px solid #fab005; padding:12px 16px; border-radius:0 8px 8px 0; margin:16px 0; font-size:15px; }
+  .warn { background:#ffe3e3; border-left:4px solid #fa5252; padding:12px 16px; border-radius:0 8px 8px 0; margin:16px 0; font-size:15px; }
+  nav.toc ol { padding-left:20px; margin:0; }
+  footer { text-align:center; color:var(--muted); font-size:13px; margin-top:60px; }
+  kbd { background:#eee; border:1px solid #ccc; border-radius:4px; padding:1px 6px; font-size:13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>🖊️ 墨課使用說明書</h1>
+  <p>白板錄課 App · iPad 橫屏使用 · 每個按鈕都講清楚</p>
+</header>
+
+<nav class="toc">
+  <ol>
+    <li><a href="#sec-top">頂部播放控制列（時間軸操作）</a></li>
+    <li><a href="#sec-actions">頂部功能列（頁面／背景／圖片／清除）</a></li>
+    <li><a href="#sec-tools">左側工具箱（畫筆／圖形／文字）</a></li>
+    <li><a href="#sec-color">顏色與粗細</a></li>
+    <li><a href="#sec-timeline">時間軸抽屜（下拉）</a></li>
+    <li><a href="#sec-gesture">手勢操作</a></li>
+    <li><a href="#sec-lesson">課程檔案（存檔／匯出／分享）</a></li>
+    <li><a href="#sec-faq">常見問題</a></li>
+  </ol>
+</nav>
+
+<!-- ================= 1 ================= -->
+<h2 id="sec-top">一、頂部播放控制列</h2>
+<p>這一排常駐在最上面，控制重播與標記。不用先下拉時間軸就能用。</p>
+
+<div class="btn-card"><div class="name"><span class="icon">🚩 標記</span>插入段落標記</div>
+<p>在<b>目前時間點</b>插入一個紅色標記（Stop Marker）。播放到標記會自動停下來，讓學生抄筆記；再按 ▶ 繼續。標記綁在當時的筆跡上，隨時可插。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">◀◀</span>跳到最前 <span style="color:#1971c2">（藍底）</span></div>
+<p>播放頭直接跳到時間軸最前面（00:00）。藍底表示「跳到底」的按鈕。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">◀◀</span>上一個標記</div>
+<p>跳到上一個 🚩 標記的位置。講錯了想退回重講就用這個。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">◀</span>上一筆</div>
+<p>播放頭退回上一筆筆跡的時間點，一筆一筆往回看。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">▶</span>播放／暫停 <span style="color:#2b8a3e">（綠底）</span></div>
+<p><b>一點就從頭重播，不用先下拉時間軸。</b>播的時候變 ❚❚，再點暫停。<b>播完自動回到即時書寫</b>，不用找 ✕。想中途拖曳時間軸，才去下拉抽屜。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">00:00</span>碼表（時間顯示）</div>
+<p>顯示「目前時間／總時間」。它也是一顆按鈕：<b>點一下＝播放／暫停</b>，跟綠色 ▶ 一樣。播放中會變綠底。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">▶</span>下一筆</div>
+<p>播放頭前進到下一筆筆跡的時間點。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">▶▶</span>下一個標記</div>
+<p>跳到下一個 🚩 標記。上課時拿簡報筆按下一頁，就是這個功能。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">▶▶</span>跳到最後 <span style="color:#1971c2">（藍底）</span></div>
+<p>播放頭直接跳到時間軸最後面（最新進度）。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">✎</span>筆跡級編輯</div>
+<p>進入編輯模式：點時間軸上的筆跡條可以<b>多選</b>（再點取消），然後按「🗑️ 刪除所選筆跡」一次刪掉多筆。被刪的筆跡連帶的標記也會一起清掉。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">⏱</span>播放速度滑桿</div>
+<p>拖曳調整重播速度，0.5x～3x。播太快聽不清楚就調慢。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">✕</span>回到即時</div>
+<p>退出重播／收起時間軸／解鎖畫布，回到可以書寫的狀態。時間軸打開時不能寫字，要先按這個。</p></div>
+
+<!-- ================= 2 ================= -->
+<h2 id="sec-actions">二、頂部功能列</h2>
+
+<div class="btn-card"><div class="name"><span class="icon">◀ 1/1 ▶</span>翻頁＋頁碼</div>
+<p>◀ 上一頁、▶ 下一頁，中間顯示目前頁碼。每一頁有<b>獨立的時間軸</b>，從 00:00 開始計時，換頁不會互相干擾。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">＋</span>新增頁面</div>
+<p>在目前頁後面加一頁空白頁。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">🗑️</span>刪除本頁</div>
+<p>刪除目前這一頁（含筆跡、標記、時間軸）。有確認框，不會誤觸。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">🎨 背景</span>切換背景</div>
+<p>白板／黑板／方格／橫線循環切換。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">🖼️ 圖片</span>插入圖片底圖</div>
+<p>從相簿選一張圖當作本頁底圖（例如講義照片）。匯入後自動進入<b>調整模式</b>：</p>
+<p>・<b>🖼️ 調整底圖</b>：重新進入調整模式<br>
+・<b>➖／➕</b>：縮小／放大底圖（每次 ×1.2，範圍 0.2x～5x；iPad 也可用雙指縮放）<br>
+・單指拖曳：移動底圖位置<br>
+・<b>✅ 完成</b>：結束調整，底圖固定</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">⟲ ⟳</span>旋轉選取</div>
+<p>用 🪢 套索框選後才出現。每按一下轉 15°，⟲ 逆時針、⟳ 順時針，繞選取框中心旋轉。文字、圖形、手寫筆跡都會轉，且<b>不會變形</b>。旋轉會記入時間軸，重播看得到。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">✋</span>手指寫字開關</div>
+<p>預設<b>開</b>：手指和 Apple Pencil 都能寫。<br>如果要防手掌誤觸（只用 Apple Pencil 寫），點一下關掉，圖示會顯示 🚫。設定會記住，下次開 App 還在。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">🧹 清除</span>清除本頁</div>
+<p>刪掉本頁<b>所有筆跡和標記</b>，時間軸回到 00:00。<b>底圖（圖片）會保留</b>，不會被清掉。有確認框。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">⤢ 100%</span>重置縮放</div>
+<p>把畫布縮放和平移一次回到 100% 原始位置。雙指縮放玩到迷路時按這個。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">📂 課程</span>課程檔案</div>
+<p>打開課程面板（詳見第七節）：儲存、匯出、匯入課程檔，存 PNG／PDF。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">🧘</span>禪模式</div>
+<p>工具列從橫排變成<b>左側直條</b>：右手拿 Apple Pencil 寫字，左手拇指在左側點筆／橡皮擦／顏色，一鍵切換。頂部列維持不動，再按 🧘 就恢復原狀。<br>上課連寫 10～20 分鐘只用一支筆時最爽；要頻繁換工具就別開。</p></div>
+
+<div class="tip">💡 頁碼旁邊的「💡≤20頁」是提醒：頁數太多 App 會變慢，建議一堂課控制在 20 頁內。不是硬上限，只是建議。</div>
+
+<!-- ================= 3 ================= -->
+<h2 id="sec-tools">三、左側工具箱</h2>
+
+<div class="btn-card"><div class="name"><span class="icon">✋</span>手抓</div>
+<p>拖曳<b>單一文字</b>（用 🔤 打出來的字）移動位置。點住文字直接拖就行。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">🪢</span>套索</div>
+<p>在畫布上<b>畫圈</b>，把圈起來的文字、圖形、手寫筆跡一起選起來。選中後出現虛線框：<br>
+・<b>單指拖曳框內</b>：整組一起移動<br>
+・<b>⟲⟳ 按鈕</b>：旋轉選取（每次 15°）<br>
+・<b>iPad 雙指轉</b>：直接用雙指旋轉選取，不用按按鈕<br>
+・切換到別的工具，選取自動取消</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">✏️</span>畫筆（預設）</div>
+<p>一般書寫。App 打開預設就是黑筆，直接寫。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">🖍️</span>螢光筆</div>
+<p>半透明粗筆，畫重點用。重播時一樣會重現。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">🧽</span>橡皮擦</div>
+<p>擦掉碰到的筆跡。<b>擦除是時間軸事件</b>：重播時會看到字先出現、再被擦掉（老師犯錯的過程也值得記錄）。<br>
+跟 ↩️ 復原不一樣：復原是「那筆沒發生過」，直接從時間軸移除。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">➖ ➡️ ⬜ ◺ ▱ ⭕</span>幾何圖形</div>
+<p>直線、箭頭、矩形、直角三角形、平行四邊形、橢圓。選工具後在畫布上拖曳畫出，鬆手定型。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">📊</span>座標軸</div>
+<p>數學課用：一筆畫出 x-y 座標軸。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">🔤</span>文字</div>
+<p>點畫布叫出輸入框，打字後點「確定」，文字落在點的位置。之後用 ✋ 手抓或 🪢 套索移動；套索選中後也能旋轉（字會跟著轉、不變形）。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">🔴</span>雷射筆</div>
+<p>上課指示用：紅點游標，<b>不會被記錄</b>，重播看不到。適合講解時指來指去。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">📏 📐 🧭</span>直尺／量角器／圓規</div>
+<p>・<b>📏 直尺</b>：拖曳移動、轉把手旋轉，靠著尺緣畫直線<br>
+・<b>📐 量角器</b>：圓心是角頂，射線自動吸附 5° 倍數<br>
+・<b>🧭 圓規</b>：點一下啟用，再點關閉；啟用後在畫布按住拖曳畫圓</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">↩️ ↪️</span>復原／重做</div>
+<p>↩️ 復原上一步（那筆從時間軸移除，當作沒發生）；↪️ 重做。也可以<b>雙指輕觸</b>畫布＝復原。</p></div>
+
+<!-- ================= 4 ================= -->
+<h2 id="sec-color">四、顏色與粗細</h2>
+
+<div class="btn-card"><div class="name"><span class="icon">🎨</span>顏色（v112 起改成彈出式）</div>
+<p>工具列上只剩一顆<b>顏色圓點按鈕</b>（顯示目前顏色）。點一下彈出選色盤：黑、白、紅、藍、綠、橘、紫、青，點顏色就切換，<b>選完自動關閉</b>。白色適合在黑板背景上寫。點盤外任意處也可關閉。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">━</span>粗細滑桿</div>
+<p>在顏色彈出盤下方，拖曳調整筆跡粗細。跟顏色一起收在同一顆按鈕裡。</p></div>
+
+<div class="tip">💡 iPad 上按鈕只顯示圖示不顯示文字（避免工具列太擠換行）。每個按鈕長按…其實不用長按，看圖示就知道；不確定的按一下頂部 🖌️ 墨課 logo 開這份說明書對。</div>
+
+<!-- ================= 5 ================= -->
+<h2 id="sec-timeline">五、時間軸抽屜（下拉）</h2>
+<p>點頂部的「⋯ 下拉展開時間軸 ⋯」把手，拉出時間軸。<b>抽屜裡現在只剩時間軸軌道</b>（v119 起所有重播按鈕都搬回頂部了）。<b>時間軸打開時不能書寫</b>，只能操作時間軸；要寫字先按 ✕ 回到即時。</p>
+
+<div class="btn-card"><div class="name"><span class="icon">━━━━●━━</span>時間軸拉桿</div>
+<p>拖曳播放頭到任意時間點，畫面即時重建（無損 scrubbing）。可以精確拖到最前（00:00）或最後。上面一格格的是每一筆筆跡。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">🗑️ 刪除所選筆跡</span>（編輯模式）</div>
+<p>先按頂部的 ✎ 進入編輯模式，點筆跡條多選，再按這個一次刪掉。被刪筆跡的標記會連帶清除。</p></div>
+
+<div class="tip">💡 時間只記錄「動作時間」：下筆時鐘走、提筆立即停。發呆、思考的時間不算進去，所以時間軸長度＝實際書寫時間。</div>
+
+<!-- ================= 6 ================= -->
+<h2 id="sec-gesture">六、手勢操作</h2>
+
+<div class="btn-card"><div class="name"><span class="icon">👆</span>單指</div><p>書寫（手指寫字開關打開時）／拖曳已選取的套索框／拖曳文字（手抓工具）。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">🤏</span>雙指縮放＋平移</div><p>兩指開合＝縮放畫布（0.5x～5x），兩指拖＝平移畫布。跟書寫不衝突。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">🔄</span>雙指旋轉（有套索選取時）</div><p>用 🪢 框選後，雙指直接轉就旋轉選取。沒有選取時雙指只做縮放平移。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">👆👆</span>雙指輕觸</div><p>＝ ↩️ 復原上一步。350ms 內的輕觸才算，真的在縮放時不會誤觸。</p></div>
+
+<div class="warn">⚠️ 時間軸打開時，單指不能寫字（鎖定），但雙指縮放不受影響。</div>
+
+<!-- ================= 7 ================= -->
+<h2 id="sec-lesson">七、課程檔案</h2>
+<p>按頂部 <b>📂 課程</b> 打開。所有資料存在 iPad 本機（Safari），雲端不收集。</p>
+
+<div class="btn-card"><div class="name"><span class="icon">💾</span>儲存目前白板</div><p>把整堂課（所有頁面的筆跡、時間軸、標記、底圖）存到本機，輸入課程名稱即可。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">⬇️</span>匯出課程檔</div><p>匯出 JSON 備份檔。建議定期匯出，Safari 清除網站資料會遺失本機課程，有備份就不怕。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">⬆️</span>匯入課程檔</div><p>匯入之前匯出的 JSON 課程檔。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">📷</span>本頁存成圖片</div><p>把目前這一頁存成 PNG。</p></div>
+
+<div class="btn-card"><div class="name"><span class="icon">📄</span>全部存成 PDF</div><p>把所有頁面一次存成 PDF 講義。</p></div>
+
+<div class="tip">💡 錄影不用 App 錄：iPad 內建螢幕錄影就夠了。課程檔很小，10 分鐘的課約 2.5～3MB。</div>
+
+<!-- ================= 8 ================= -->
+<h2 id="sec-faq">八、常見問題</h2>
+
+<div class="btn-card"><div class="name">Q：左上角「墨課」可以點嗎？</div>
+<p>A：可以。點左上 logo 開啟使用說明（就是這份）；點<b>版本號</b>（如 v119）會手動檢查更新——Safari 有時會卡舊版快取，點版本號可強制刷新。</p></div>
+
+<div class="btn-card"><div class="name">Q：寫字時頂部時間不動？</div>
+<p>A：時間只在「有動作」時走。下筆開始計、提筆立即停；沒動作不計時是正常的。</p></div>
+
+<div class="btn-card"><div class="name">Q：重播時某筆不見了？</div>
+<p>A：先確認是不是被橡皮擦擦掉了（擦除會重播出來：先出現再消失）。如果是按 ↩️ 復原的，那筆就當沒發生過，不會出現在重播裡。</p></div>
+
+<div class="btn-card"><div class="name">Q：全部擦光後打不開時間軸？</div>
+<p>A：不會。寫了又擦光，時間軸照樣能開、能重播（看得到字出現再被擦掉）。</p></div>
+
+<div class="btn-card"><div class="name">Q：旋轉後圖形變形？</div>
+<p>A：v109 起不會了。圖形轉中心＋角度、文字整體旋轉，都不拉扯變形。如果還看到變形，請回報版本號。</p></div>
+
+<div class="btn-card"><div class="name">Q：禪模式下怎麼換工具？</div>
+<p>A：左側直條就是工具列，只是轉了 90 度。筆、橡皮擦、顏色、復原都在，點一下就切。想回橫排再按一次頂部的 🧘。</p></div>
+
+<div class="btn-card"><div class="name">Q：播到一半想停下來寫字？</div>
+<p>A：有兩種：① 再點一次綠色 ▶（或碼表）暫停，然後下拉時間軸按 ✕ 回到即時；② 直接把時間軸播完，它會自動回到書寫狀態。</p></div>
+
+<footer>墨課使用說明書 · 隨 App 版本更新 · 最後更新：v119（2026-10-07）</footer>
+
+</div>
+</body>
+</html>

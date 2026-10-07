@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>墨課</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <!-- 頂部列 -->
+  <header id="topbar">
+    <div class="brand" id="brand-help" title="點我看使用說明" style="cursor:pointer">🖌️ 墨課 <span id="app-ver" class="ver"></span></div>
+    <div id="rec-controls">
+      <button id="btn-mark" class="rec-btn" title="插入段落標記（Stop Marker），隨時可用">🚩 <span class="btn-label">標記</span></button>
+      <!-- v119：全部重播按鈕回頂部（v111 佈局，不用下拉時間軸） -->
+      <button id="btn-tl-start" title="跳到最前">◀◀</button>
+      <button id="btn-tl-prev" title="上一個標記">◀◀</button>
+      <button id="btn-tl-prev-stroke" title="上一筆">◀</button>
+      <button id="btn-tl-play" class="primary" title="播放 / 暫停（一點即播，不用開時間軸）">▶</button>
+      <button id="btn-tl-next-stroke" title="下一筆">▶</button>
+      <button id="btn-tl-next" title="下一個標記">▶▶</button>
+      <button id="btn-tl-end" title="跳到最後">▶▶</button>
+      <button id="btn-tl-edit" title="筆跡級時間軸編輯">✎</button>
+      <button id="tl-time" class="rec-btn" title="播放 / 暫停">00:00 / 00:00</button>
+      <span id="tl-speed-wrap" title="播放速度（可拖曳）">
+        <span id="tl-speed-icon">⏱</span>
+        <input type="range" id="tl-speed" min="0.5" max="3" step="0.25" value="1">
+        <span id="tl-speed-label">1x</span>
+      </span>
+      <button id="btn-tl-exit" title="回到即時">✕</button>
+    </div>
+    <div class="top-actions">
+      <button id="btn-page-prev" title="上一頁">◀</button>
+      <span id="page-label">1 / 1</span>
+      <span id="page-hint" class="page-hint" title="頁數太多 iPad 會變慢，建議每堂課不超過 20 頁">💡≤20頁</span>
+      <button id="btn-page-next" title="下一頁">▶</button>
+      <button id="btn-page-add" title="新增頁面">＋</button>
+      <button id="btn-page-del" title="刪除本頁">🗑️</button>
+      <button id="btn-bg" title="切換背景">🎨 <span class="btn-label">背景</span></button>
+      <button id="btn-image" title="插入圖片為底圖">🖼️ <span class="btn-label">圖片</span></button>
+      <button id="btn-img-adjust" title="調整底圖大小/位置" class="hidden">🖼️ <span class="btn-label">調整底圖</span></button>
+      <button id="btn-img-zoom-out" title="縮小底圖" class="hidden">➖</button>
+      <button id="btn-img-zoom-in" title="放大底圖" class="hidden">➕</button>
+      <button id="btn-img-done" title="完成底圖調整" class="hidden primary">✅ <span class="btn-label">完成</span></button>
+      <button id="btn-rotate-left" title="逆時針旋轉選取（15°）" class="hidden">⟲</button>
+      <button id="btn-rotate-right" title="順時針旋轉選取（15°）" class="hidden">⟳</button>
+      <button id="btn-finger" title="手指寫字開關（預設關：只有 Apple Pencil 能寫，防手掌誤觸）">✋</button>
+      <button id="btn-clear" title="清除本頁">🧹 <span class="btn-label">清除</span></button>
+      <button id="btn-reset-view" title="重置縮放（回到 100%）">⤢ <span class="btn-label">100%</span></button>
+      <button id="btn-lessons" title="課程檔案">📂 <span class="btn-label">課程</span></button>
+      <button id="btn-zen" title="禪模式（隱藏工具列，專注書寫）">🧘</button>
+    </div>
+    <!-- v60：時間軸控制列常駐頂部（不用下拉也能播放） -->
+    <input type="file" id="file-image" accept="image/*" class="hidden">
+  </header>
+
+  <!-- 講者視圖面板（v13）：Preview Next，老師端專用 -->
+  <!-- 主區 -->
+  <main id="stage">
+<!-- v21：浮動可拖拉工具列（預設頂部置中） -->
+    <aside id="toolbar">
+      <div class="tool-group" id="tools">
+        <button data-tool="hand" class="tool" title="手抓（拖曳移動文字）">✋</button>
+        <button data-tool="lasso" class="tool" title="套索（框選多個筆跡一起移動）">🪢</button>
+        <button data-tool="pen" class="tool active" title="畫筆">✏️</button>
+        <button data-tool="highlighter" class="tool" title="螢光筆">🖍️</button>
+        <button data-tool="eraser" class="tool" title="橡皮擦">🧽</button>
+        <button data-tool="line" class="tool" title="直線">➖</button>
+        <button data-tool="arrow" class="tool" title="箭頭">➡️</button>
+        <button data-tool="rect" class="tool" title="矩形">⬜</button>
+        <button data-tool="rtriangle" class="tool" title="直角三角形">◺</button>
+        <button data-tool="parallelogram" class="tool" title="平行四邊形">▱</button>
+        <button data-tool="ellipse" class="tool" title="橢圓">⭕</button>
+        <button data-tool="axes" class="tool" title="座標軸">📊</button>
+        <button data-tool="text" class="tool" title="文字">🔤</button>
+        <button data-tool="laser" class="tool" title="雷射筆（不錄影）">🔴</button>
+      </div>
+      <div class="tool-group" id="instruments">
+        <label class="lbl">規尺</label>
+        <button data-overlay="ruler" class="tool" title="直尺（拖曳移動／把手旋轉，靠尺緣畫直線）">📏</button>
+        <button data-overlay="protractor" class="tool" title="量角器（圓心為角頂，射線自動吸附 5°）">📐</button>
+        <button data-tool="compass" class="tool" title="圓規（點一下啟用，再點一下關閉；啟用後在畫布上按住拖曳畫圓）">🧭</button>
+      </div>
+      <!-- v112：顏色＋粗細收進 popover，平時只佔一顆按鈕 -->
+      <div class="tool-group" id="color-group">
+        <button id="btn-color" class="tool" title="顏色 / 粗細"><span id="color-dot"></span></button>
+        <div id="color-pop" class="hidden">
+          <div id="colors"></div>
+          <div class="pop-row">
+            <label class="lbl">粗細</label>
+            <input type="range" id="width-range" min="2" max="24" value="5">
+          </div>
+        </div>
+      </div>
+      <div class="tool-group row">
+        <button id="btn-undo" title="上一步">↩️</button>
+        <button id="btn-redo" title="重做">↪️</button>
+      </div>
+    </aside>
+    <div id="canvas-wrap">
+      <canvas id="board"></canvas>
+      <!-- v20：畫布浮動復原／重做（寫字時拇指可及，不必開側欄） -->
+      <div id="float-undo">
+        <button id="btn-float-undo" title="復原上一步（或雙指輕觸畫布）">↩️</button>
+        <button id="btn-float-redo" title="重做">↪️</button>
+      </div>
+      <div id="text-overlay" class="hidden">
+        <textarea id="text-input" rows="2" placeholder="輸入文字…"></textarea>
+        <div class="text-btns">
+          <button id="text-ok">確定</button>
+          <button id="text-cancel">取消</button>
+        </div>
+      </div>
+      <div id="toast" class="hidden"></div>
+    </div>
+    <!-- Doceri 式下滑時間軸：把手常駐頂部，下拉展開抽屜 -->
+    <div id="tl-pull">
+      <div id="tl-handle" title="下拉展開時間軸"><span class="grip">⋯⋯</span><span id="tl-handle-label">下拉展開時間軸</span><span class="grip">⋯⋯</span></div>
+      <div id="tl-drawer-wrap">
+        <div id="tl-drawer">
+          <!-- v119：重播按鈕全回頂部，抽屜只剩時間軸軌道 -->
+          <div class="tl-row tl-timeline-row">
+            <div id="tl-seek-wrap">
+              <input type="range" id="tl-seek" min="0" max="100" value="0" step="1">
+              <div id="tl-ticks"></div>
+            </div>
+          </div>
+          <div id="tl-edit-panel" class="hidden">
+            <div id="tl-strip"><div id="tl-playhead"></div></div>
+            <div class="tl-row small">
+              <span class="hint">點選筆跡條多選刪除 · 拖曳 🚩 移標記</span>
+              <button id="btn-tl-del-stroke" class="hidden">🗑️ 刪除所選筆跡</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+</div>
+
+<!-- PDF 匯入 modal -->
+<!-- 分享 modal -->
+<div id="modal-share" class="modal hidden">
+  <div class="modal-card">
+    <h2>📡 分享投影</h2>
+    <div id="share-host-setup">
+      <p class="hint">在 iPad 上按「開始分享」，電子白板用瀏覽器掃 QR Code（或輸入房間碼）即可即時看到你的板書。</p>
+      <div class="row"><button id="btn-start-share" class="primary">開始分享</button></div>
+    </div>
+    <div id="share-host-live" class="hidden">
+      <p class="hint">電子白板開啟以下連結或掃碼加入：</p>
+      <div id="share-qrcode"></div>
+      <div class="share-code">房間碼：<b id="share-code"></b></div>
+      <div class="share-url" id="share-url"></div>
+      <p class="hint">👀 觀看中：<b id="share-viewers">0</b></p>
+      <div class="row"><button id="btn-stop-share">停止分享</button></div>
+    </div>
+    <hr>
+    <div id="share-guest-setup">
+      <p class="hint">這台是電子白板？輸入房間碼加入投影：</p>
+      <div class="row">
+        <input id="guest-code" placeholder="房間碼（6 碼）" maxlength="6" style="text-transform:uppercase">
+        <button id="btn-join-share" class="primary">加入投影</button>
+      </div>
+    </div>
+    <div class="row end"><button class="modal-close">關閉</button></div>
+  </div>
+</div>
+
+<!-- 課程管理 modal -->
+<div id="modal-lessons" class="modal hidden">
+  <div class="modal-card">
+    <h2>📂 課程檔案</h2>
+    <p class="hint">課程檔為向量格式（筆跡＋語音），檔案很小，可重播、繼續編輯、匯出影片。</p>
+    <div class="row">
+      <input id="lesson-title" placeholder="課程名稱（存檔用）">
+      <button id="btn-save-lesson" class="primary">💾 儲存目前白板</button>
+    </div>
+    <ul id="lesson-list"></ul>
+    <div class="row">
+      <button id="btn-export-lesson">⬇️ 匯出課程檔</button>
+      <button id="btn-import-lesson">⬆️ 匯入課程檔</button>
+      <input type="file" id="file-lesson" accept=".json,application/json" class="hidden">
+    </div>
+    <div class="row">
+      <button id="btn-export-png" title="將本頁存成 PNG 圖片">📷 本頁存成圖片</button>
+      <button id="btn-export-pdf" title="將全部頁面存成 PDF">📄 全部存成 PDF</button>
+    </div>
+    <div class="row end"><button class="modal-close">關閉</button></div>
+  </div>
+</div>
+
+<!-- v81：使用說明 modal（點左上墨課 logo 開啟） -->
+<div id="modal-help" class="modal hidden">
+  <div class="modal-card" style="max-width:560px">
+    <h2>🖌️ 墨課使用說明</h2>
+    <div style="text-align:left; line-height:1.9; font-size:15px">
+      <p><b>✏️ 寫字</b>：Apple Pencil 直接寫。手指預設不寫字（防手掌誤觸），按 <b>✋</b> 可切換。</p>
+      <p><b>🚩 標記</b>：播到標記自動停，給學生抄筆記，再按 ▶ 繼續。</p>
+      <p><b>▶ 播放</b>：從頭重播本頁筆跡，不用展開時間軸。</p>
+      <p><b>🖼️ 圖片</b>：選圖片設為底圖，匯入後雙指縮放調大小、單指拖曳移位置，按 ✅ 完成。</p>
+      <p><b>📄 匯出</b>：📷 存 PNG、📄 匯出整份 PDF。</p>
+      <p><b>💾 備份</b>：📂 課程 → 匯出 JSON，換 iPad 或清資料時可還原。</p>
+      <p><b>🔄 更新</b>：點左上版本號可手動檢查更新。</p>
+      <p class="hint">💡 建議每份課程 ≤20 頁，太多頁 iPad 會變慢。資料存在本機，清除網站資料會遺失，記得備份。</p>
+    </div>
+    <div class="row end"><button class="modal-close">關閉</button></div>
+  </div>
+</div>
+
+<!-- 播放器 modal -->
+<div id="modal-player" class="modal hidden">
+  <div class="modal-card wide">
+    <h2 id="player-title">▶ 重播課程</h2>
+    <div id="player-wrap"><canvas id="player-canvas"></canvas><canvas id="player-overlay"></canvas></div>
+    <div id="overlay-bar" class="row hidden">
+      <span class="hint">📍 停在段落標記，可臨時塗鴉：</span>
+      <button id="btn-overlay-commit" class="primary">✅ 併入時間軸</button>
+      <button id="btn-overlay-discard">🗑 丟棄</button>
+    </div>
+    <div class="row"><input type="range" id="player-seek" min="0" max="100" value="0" step="500"></div>
+    <div class="row center">
+      <button id="btn-play-prev-stop" title="回到上一個段落標記">⏮ 上一段</button>
+      <button id="btn-play-toggle" class="primary">⏸ 暫停</button>
+      <button id="btn-play-next-stop" title="下一段：點一下動畫播放，點兩下瞬間呈現">⏭ 下一段</button>
+      <button id="btn-play-restart">🔁 重播</button>
+      <label class="hint" for="player-speed">速度</label>
+      <select id="player-speed">
+        <option value="0.5">0.5x</option>
+        <option value="1" selected>1x</option>
+        <option value="1.5">1.5x</option>
+        <option value="2">2x</option>
+      </select>
+      <span id="player-time">00:00 / 00:00</span>
+      <span id="player-marker" class="hint"></span>
+    </div>
+    <div class="row end"><button class="modal-close">關閉</button></div>
+  </div>
+</div>
+
+<!-- 匯出影片 modal -->
+<script src="js/vendor/peerjs.min.js"></script>
+<script src="js/vendor/qrcode.min.js"></script>
+<script src="js/vendor/jspdf.umd.min.js"></script>
+<script src="js/board.js"></script>
+<script src="js/share.js"></script>
+<script src="js/lesson.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

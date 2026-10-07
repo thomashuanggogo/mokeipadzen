@@ -1,0 +1,9 @@
+# OS / editor artifacts
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Local dev
+node_modules/
+dist/
