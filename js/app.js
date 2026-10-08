@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v119';
+const APP_VERSION = 'v126';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -56,19 +56,35 @@ function todayStr() {
     colorBox.appendChild(b);
   });
   // v112：顏色/粗細 popover 開關（點外面自動關）
+  // v124：popover 改 position:fixed（iPad 工具列 overflow-x:auto 會裁掉 absolute 層），用 JS 算位置
   $('btn-color').onclick = (e) => {
     e.stopPropagation();
-    colorPop.classList.toggle('hidden');
+    if (colorPop.classList.contains('hidden')) {
+      const r = $('btn-color').getBoundingClientRect();
+      if (document.body.classList.contains('zen')) {
+        colorPop.style.left = (r.right + 6) + 'px';
+        colorPop.style.top = Math.max(8, r.top) + 'px';
+      } else {
+        colorPop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 200)) + 'px';
+        colorPop.style.top = (r.bottom + 6) + 'px';
+      }
+      colorPop.classList.remove('hidden');
+    } else {
+      colorPop.classList.add('hidden');
+    }
   };
+  // v124：工具列捲動／視窗縮放時關掉 popover（fixed 定位不會跟著跑）
+  $('toolbar').addEventListener('scroll', () => colorPop.classList.add('hidden'), { passive: true });
+  window.addEventListener('resize', () => colorPop.classList.add('hidden'));
   document.addEventListener('click', (e) => {
     if (!colorPop.classList.contains('hidden') && !$('color-group').contains(e.target)) {
       colorPop.classList.add('hidden');
     }
   });
-  document.querySelectorAll('#tools .tool').forEach(b => {
+  document.querySelectorAll('#tools .tool[data-tool]').forEach(b => {
     b.onclick = () => {
       board.setTool(b.dataset.tool);
-      document.querySelectorAll('#tools .tool').forEach(x => x.classList.remove('active'));
+      document.querySelectorAll('#tools .tool[data-tool]').forEach(x => x.classList.remove('active'));
       document.querySelectorAll('#instruments .tool').forEach(x => { if (!x.dataset.overlay) x.classList.remove('active'); });
       b.classList.add('active');
     };
@@ -257,6 +273,18 @@ function todayStr() {
     document.body.classList.toggle('zen');
     setTimeout(positionTlPull, 300); // 等版面切換完再定位時間軸把手
   };
+  // v125：全螢幕（iPad Safari 藏網址列用；iPhone 不支援會靜默無反應）
+  // v126：主畫面（standalone）模式本來就沒網址列，按鈕自動隱藏
+  if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) {
+    $('btn-fullscreen').style.display = 'none';
+  }
+  $('btn-fullscreen').onclick = () => {
+    const el = document.documentElement;
+    if (document.fullscreenElement) document.exitFullscreen();
+    else if (el.requestFullscreen) el.requestFullscreen();
+    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+  };
+  document.addEventListener('fullscreenchange', () => board.resize());
   $('btn-undo').onclick = () => board.undo();
   $('btn-redo').onclick = () => board.redo();
   // v20：畫布浮動鈕（寫字時拇指可及）

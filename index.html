@@ -56,6 +56,7 @@
       <button id="btn-reset-view" title="重置縮放（回到 100%）">⤢ <span class="btn-label">100%</span></button>
       <button id="btn-lessons" title="課程檔案">📂 <span class="btn-label">課程</span></button>
       <button id="btn-zen" title="禪模式（隱藏工具列，專注書寫）">🧘</button>
+      <button id="btn-fullscreen" title="全螢幕（隱藏瀏覽器網址列）">⛶</button>
     </div>
     <!-- v60：時間軸控制列常駐頂部（不用下拉也能播放） -->
     <input type="file" id="file-image" accept="image/*" class="hidden">
@@ -69,6 +70,17 @@
       <div class="tool-group" id="tools">
         <button data-tool="hand" class="tool" title="手抓（拖曳移動文字）">✋</button>
         <button data-tool="lasso" class="tool" title="套索（框選多個筆跡一起移動）">🪢</button>
+        <!-- v120：顏色按鈕搬到套索旁邊（原本在工具列尾端，iPad 橫滑不好找） -->
+        <div id="color-group">
+          <button id="btn-color" class="tool" title="顏色 / 粗細"><span id="color-dot"></span></button>
+          <div id="color-pop" class="hidden">
+            <div id="colors"></div>
+            <div class="pop-row">
+              <label class="lbl">粗細</label>
+              <input type="range" id="width-range" min="2" max="24" value="5">
+            </div>
+          </div>
+        </div>
         <button data-tool="pen" class="tool active" title="畫筆">✏️</button>
         <button data-tool="highlighter" class="tool" title="螢光筆">🖍️</button>
         <button data-tool="eraser" class="tool" title="橡皮擦">🧽</button>
@@ -88,17 +100,7 @@
         <button data-overlay="protractor" class="tool" title="量角器（圓心為角頂，射線自動吸附 5°）">📐</button>
         <button data-tool="compass" class="tool" title="圓規（點一下啟用，再點一下關閉；啟用後在畫布上按住拖曳畫圓）">🧭</button>
       </div>
-      <!-- v112：顏色＋粗細收進 popover，平時只佔一顆按鈕 -->
-      <div class="tool-group" id="color-group">
-        <button id="btn-color" class="tool" title="顏色 / 粗細"><span id="color-dot"></span></button>
-        <div id="color-pop" class="hidden">
-          <div id="colors"></div>
-          <div class="pop-row">
-            <label class="lbl">粗細</label>
-            <input type="range" id="width-range" min="2" max="24" value="5">
-          </div>
-        </div>
-      </div>
+      <!-- v112：顏色＋粗細收進 popover，平時只佔一顆按鈕（v120：已搬到 #tools 內套索旁邊） -->
       <div class="tool-group row">
         <button id="btn-undo" title="上一步">↩️</button>
         <button id="btn-redo" title="重做">↪️</button>
@@ -203,14 +205,39 @@
   <div class="modal-card" style="max-width:560px">
     <h2>🖌️ 墨課使用說明</h2>
     <div style="text-align:left; line-height:1.9; font-size:15px">
-      <p><b>✏️ 寫字</b>：Apple Pencil 直接寫。手指預設不寫字（防手掌誤觸），按 <b>✋</b> 可切換。</p>
-      <p><b>🚩 標記</b>：播到標記自動停，給學生抄筆記，再按 ▶ 繼續。</p>
-      <p><b>▶ 播放</b>：從頭重播本頁筆跡，不用展開時間軸。</p>
-      <p><b>🖼️ 圖片</b>：選圖片設為底圖，匯入後雙指縮放調大小、單指拖曳移位置，按 ✅ 完成。</p>
-      <p><b>📄 匯出</b>：📷 存 PNG、📄 匯出整份 PDF。</p>
-      <p><b>💾 備份</b>：📂 課程 → 匯出 JSON，換 iPad 或清資料時可還原。</p>
-      <p><b>🔄 更新</b>：點左上版本號可手動檢查更新。</p>
-      <p class="hint">💡 建議每份課程 ≤20 頁，太多頁 iPad 會變慢。資料存在本機，清除網站資料會遺失，記得備份。</p>
+      <p><b>── 頂部重播列 ──</b></p>
+      <p><b>🚩 標記</b>：在目前時間插入段落標記，播到自動停（給學生抄筆記），再按 ▶ 繼續。</p>
+      <p><b>◀◀ 跳到最前／▶▶ 跳到最後</b><span style="color:#1971c2">（藍底）</span>：播放頭直接跳到時間軸頭／尾。</p>
+      <p><b>◀◀ 上一個標記／▶▶ 下一個標記</b><span style="color:#7048e8">（紫底）</span>：在 🚩 標記之間跳轉。</p>
+      <p><b>◀ 上一筆／▶ 下一筆</b><span style="color:#f08c00">（橘底）</span>：播放頭一筆一筆前後移動。</p>
+      <p><b>▶ 播放</b><span style="color:#2b8a3e">（綠底）</span>：一點就從頭重播，不用展開時間軸；播完自動回書寫。</p>
+      <p><b>✎ 筆跡編輯</b>：點時間軸上的筆跡條多選，再刪掉多筆。</p>
+      <p><b>00:00 碼表</b>：點一下＝播放／暫停，顯示目前／總時間。</p>
+      <p><b>⏱ 速度</b>：拖曳調整重播速度 0.5x～3x。</p>
+      <p><b>✕ 回到即時</b>：退出重播／收起時間軸，回到可書寫狀態。</p>
+      <p><b>── 頁面 ──</b></p>
+      <p><b>◀ 1/1 ▶</b>：翻頁，每頁有獨立時間軸。<b>＋</b> 新增一頁，<b>🗑️</b> 刪除本頁。</p>
+      <p><b>── 頂部功能 ──</b></p>
+      <p><b>🎨 背景</b>：白板／黑板／方格／橫線循環切換。</p>
+      <p><b>🖼️ 圖片</b>：選圖片當本頁底圖；<b>🖼️ 調整底圖</b>＋<b>➖➕</b> 重調大小位置，<b>✅</b> 完成固定。</p>
+      <p><b>✋ 手指寫字</b>：開＝手指＋筆都能寫；關＝只留 Apple Pencil（防手掌誤觸）。</p>
+      <p><b>🧹 清除</b>：刪光本頁筆跡和標記（底圖保留）。</p>
+      <p><b>⤢ 100%</b>：畫布縮放平移回到原始位置。</p>
+      <p><b>📂 課程</b>：儲存／匯出 JSON 備份／匯入／存 PNG／匯出 PDF。資料存本機，記得備份。</p>
+      <p><b>🧘 禪模式</b>：工具列變左側直條，右手寫字、左手切工具；再按恢復。</p>
+      <p><b>⛶ 全螢幕</b>：隱藏 Safari 網址列，畫布變大；再按一次退出。</p>
+      <p><b>── 工具列 ──</b></p>
+      <p><b>✋ 手抓</b>：拖曳移動文字。<b>🪢 套索</b>：畫圈框選多個筆跡一起移動；雙指可旋轉。</p>
+      <p><b>🎨 顏色</b>（套索旁）：8 色＋粗細滑桿，點一下就換。</p>
+      <p><b>✏️ 畫筆／🖍️ 螢光筆／🧽 橡皮擦</b>：橡皮擦是時間軸事件，重播看得到擦除過程。</p>
+      <p><b>➖ ➡️ ⬜ ◺ ▱ ⭕</b>：直線／箭頭／矩形／直角三角形／平行四邊形／橢圓，拖曳畫出。</p>
+      <p><b>📊 座標軸</b>：一筆畫出 x-y 軸。<b>🔤 文字</b>：點畫布打字。</p>
+      <p><b>🔴 雷射筆</b>：上課指示用，不會被記錄。</p>
+      <p><b>📏 直尺／📐 量角器／🧭 圓規</b>：幾何作圖工具。</p>
+      <p><b>↩️ ↪️</b>：復原／重做；雙指輕觸畫布＝復原。</p>
+      <p><b>── 時間軸抽屜 ──</b></p>
+      <p>點「⋯ 下拉展開時間軸 ⋯」拉出；<b>打開時不能寫字</b>，先按 ✕ 回即時。拖曳拉桿可精確 scrub；✎ 編輯模式＋🗑️ 可刪多筆筆跡。</p>
+      <p class="hint">💡 時間只記「動作時間」：下筆走、提筆停。建議每份課程 ≤20 頁。點左上版本號可手動檢查更新。</p>
     </div>
     <div class="row end"><button class="modal-close">關閉</button></div>
   </div>

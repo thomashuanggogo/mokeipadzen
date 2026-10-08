@@ -78,9 +78,11 @@ button.primary:active { background: #1864ab; }
 /* v86: 跳到最前/最後用藍色區別，不用豎線字元（iPad 上會跑掉） */
 #rec-controls #btn-tl-start,
 #rec-controls #btn-tl-end { background: #1971c2; border-color: #1971c2; }
-/* v118：頂部前進/後退標記鍵跟 v111 配色（最前最後為藍色） */
+/* v123：頂部重播鍵四色分組——頭尾藍、標記紫、逐筆橘、播放綠 */
 #rec-controls #btn-tl-prev,
-#rec-controls #btn-tl-next { background: #1971c2; border-color: #1971c2; }
+#rec-controls #btn-tl-next { background: #7048e8; border-color: #7048e8; }
+#rec-controls #btn-tl-prev-stroke,
+#rec-controls #btn-tl-next-stroke { background: #f08c00; border-color: #f08c00; }
 #rec-controls #btn-tl-play.primary { background: #2f9e44; border-color: #2f9e44; color: #fff; }
 #rec-controls #btn-tl-edit.active { background: #ffd43b; }
 #rec-controls .hint { color: #adb5bd; }
@@ -319,7 +321,8 @@ body.guest-mode #rec-controls { visibility: hidden; }
 #color-group { position: relative; }
 #color-dot { display: inline-block; width: 22px; height: 22px; border-radius: 50%; background: #111; border: 2px solid #adb5bd; vertical-align: middle; }
 #color-pop {
-  position: absolute; top: calc(100% + 6px); left: 0; z-index: 100;
+  /* v124：改 fixed 定位——iPad 工具列 overflow-x:auto 會把 absolute 彈出層裁掉 */
+  position: fixed; z-index: 1000;
   background: #fff; border: 1px solid #dee2e6; border-radius: 12px;
   box-shadow: 0 4px 16px rgba(0,0,0,.18); padding: 12px;
   display: flex; flex-direction: column; gap: 10px;
@@ -354,7 +357,7 @@ body.zen #toolbar {
   padding: 8px 4px; gap: 8px; align-items: center;
 }
 body.zen #toolbar .tool-group { flex-direction: column; }
-body.zen #color-pop { left: calc(100% + 6px); top: 0; } /* 直條模式 popover 改從右側彈出 */
+/* v124：禪模式 popover 位置改由 JS 計算（fixed），CSS 不再寫死 */
 #zen-dot { display: none !important; } /* v114：頂部列保留，🧘 直接切換，不需小圓點 */
 
 /* v53：頁數提醒 */
