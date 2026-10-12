@@ -35,7 +35,13 @@ class Board {
     this._pointers = new Map();  // pointerId -> {x, y}
     // v73：底圖調整模式（匯入圖片後可調大小/位置）
     this.imgAdjust = false;
-    this._imgDrag = null;  // 單指拖曳底圖 {x0, y0, imgX0, imgY0}
+    this._imgDrag = null;  // 單指拖曳底圖 {id, x0, y0, imgX0, imgY0}
+    this.imgSelId = null;  // v139：多圖調整時選中的圖片 id
+    // v143：圖片裁切模式
+    this.cropMode = false;
+    this.cropId = null;    // 正在裁切的圖片 id
+    this._crop = null;     // {fx0, fy0, fx1, fy1} 正規化裁切框（相對圖片 0~1）
+    this._cropDrag = null; // {handle} 或 {move}
     // v76：手指寫字開關（預設關＝只有 Apple Pencil 能畫，防手掌誤觸）
     this.fingerDraw = true;  // v104：預設手指可寫（南勛：預設手寫，用 Apple Pencil 再按開關切換）
     // 幾何規尺（v14）：由 app.js 設定
@@ -66,11 +72,125 @@ class Board {
     // v47：每頁獨立時間軸（Doceri 式）— events/stops/clock 都是該頁自己的，
     // 不再用全域 SessionLog + page 標籤過濾。換頁＝換整組時間軸，不可能串頁。
     // v73：底圖變換（使用者可調大小/位置）— imgS 縮放、imgX/imgY 位移
+    // v139：多圖疊放 — images 陣列，每張 {id, src, x, y, s}；舊版單張 image 自動遷移
     return {
-      bg: bg || 'white', image: null, strokes: [], undo: [], redo: [],
+      bg: bg || 'white', image: null, images: [], strokes: [], undo: [], redo: [],
       imgS: 1, imgX: 0, imgY: 0,
       tl: { events: [], stops: [], clock: null, unadded: [] }
     };
+  }
+  /* v139：舊版單張底圖遷移到 images 陣列（讀舊檔時呼叫） */
+  _migrateImages(pg) {
+    if (pg.image && (!pg.images || !pg.images.length)) {
+      pg.images = [{
+        id: 'img_' + Date.now().toString(36) + '_m',
+        src: pg.image, x: pg.imgX || 0, y: pg.imgY || 0, s: pg.imgS || 1
+      }];
+      pg.image = null;
+    }
+    if (!pg.images) pg.images = [];
+    return pg.images;
+  }
+  _imgById(pg, id) {
+    const imgs = this._migrateImages(pg);
+    return imgs.find(im => im.id === id) || null;
+  }
+  /* v139：圖片在畫布上的邊界（畫布座標），供點擊判斷 */
+  _imgBounds(im) {
+    const W = this._cssW, H = this._cssH;
+    if (!im._el || !im._el.naturalWidth) return null;
+    const s = Math.min(W / im._el.naturalWidth, H / im._el.naturalHeight) * (im.s || 1);
+    const dw = im._el.naturalWidth * s, dh = im._el.naturalHeight * s;
+    const cx = W / 2 + (im.x || 0), cy = H / 2 + (im.y || 0);
+    return { x0: cx - dw / 2, y0: cy - dh / 2, x1: cx + dw / 2, y1: cy + dh / 2, cx, cy };
+  }
+  /* v139：從上層往下找點中的圖片（sx, sy 為螢幕座標） */
+  _imgHitTest(sx, sy) {
+    const v = this.view;
+    const cx = (sx - v.ox) / v.scale, cy = (sy - v.oy) / v.scale;
+    const imgs = this._migrateImages(this.page);
+    for (let i = imgs.length - 1; i >= 0; i--) {
+      const b = this._imgBounds(imgs[i]);
+      if (b && cx >= b.x0 && cx <= b.x1 && cy >= b.y0 && cy <= b.y1) return imgs[i];
+    }
+    return null;
+  }
+  /* v143：進入/離開裁切模式 */
+  enterCrop(id) {
+    const im = this._imgById(this.page, id);
+    if (!im || !im._el) return false;
+    this.cropMode = true;
+    this.cropId = id;
+    this._crop = { fx0: 0, fy0: 0, fx1: 1, fy1: 1 }; // 預設全圖
+    this._cropDrag = null;
+    this.render();
+    return true;
+  }
+  exitCrop() {
+    this.cropMode = false;
+    this.cropId = null;
+    this._crop = null;
+    this._cropDrag = null;
+    this.render();
+  }
+  /* v143：裁切框在畫布上的座標（canvas coords） */
+  _cropBounds() {
+    if (!this._crop) return null;
+    const im = this._imgById(this.page, this.cropId);
+    if (!im) return null;
+    const b = this._imgBounds(im);
+    if (!b) return null;
+    const c = this._crop;
+    return {
+      x0: b.x0 + c.fx0 * (b.x1 - b.x0),
+      y0: b.y0 + c.fy0 * (b.y1 - b.y0),
+      x1: b.x0 + c.fx1 * (b.x1 - b.x0),
+      y1: b.y0 + c.fy1 * (b.y1 - b.y0)
+    };
+  }
+  /* v143：裁切把手位置（8 個：四角＋四邊中點） */
+  _cropHandles() {
+    const cb = this._cropBounds();
+    if (!cb) return [];
+    const { x0, y0, x1, y1 } = cb;
+    const mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+    return [
+      { x: x0, y: y0, id: 'nw' }, { x: mx, y: y0, id: 'n' }, { x: x1, y: y0, id: 'ne' },
+      { x: x0, y: my, id: 'w' },                                 { x: x1, y: my, id: 'e' },
+      { x: x0, y: y1, id: 'sw' }, { x: mx, y: y1, id: 's' }, { x: x1, y: y1, id: 'se' }
+    ];
+  }
+  /* v143：執行裁切，用 canvas 把選區轉成新圖片 */
+  applyCrop() {
+    const im = this._imgById(this.page, this.cropId);
+    const c = this._crop;
+    if (!im || !im._el || !c) return false;
+    const natW = im._el.naturalWidth, natH = im._el.naturalHeight;
+    const sx = Math.round(c.fx0 * natW), sy = Math.round(c.fy0 * natH);
+    const sw = Math.round((c.fx1 - c.fx0) * natW), sh = Math.round((c.fy1 - c.fy0) * natH);
+    if (sw < 4 || sh < 4) return false;
+    // 記住裁切區中心在畫布上的位置，裁完對齊
+    const b = this._imgBounds(im);
+    const W = this._cssW, H = this._cssH;
+    const ccx = b.x0 + (c.fx0 + c.fx1) / 2 * (b.x1 - b.x0);
+    const ccy = b.y0 + (c.fy0 + c.fy1) / 2 * (b.y1 - b.y0);
+    const cv = document.createElement('canvas');
+    cv.width = sw; cv.height = sh;
+    cv.getContext('2d').drawImage(im._el, sx, sy, sw, sh, 0, 0, sw, sh);
+    const newSrc = cv.toDataURL('image/jpeg', 0.92);
+    const oldS = im.s || 1;
+    const newImg = new Image();
+    newImg.onload = () => {
+      im._el = newImg;
+      im.x = ccx - W / 2;
+      im.y = ccy - H / 2;
+      im.s = oldS;
+      this._emit('image', { page: this.pageIndex, action: 'crop', id: im.id });
+      this.render();
+    };
+    newImg.src = newSrc;
+    im.src = newSrc;
+    return true;
   }
   get page() { return this.pages[this.pageIndex]; }
   pageCount() { return this.pages.length; }
@@ -114,12 +234,41 @@ class Board {
     this.render();
   }
   setImage(dataUrl) {
-    this.page.image = dataUrl;
-    this._emit('image', { page: this.pageIndex, dataUrl });
+    // v139：改為多圖，setImage 保留相容（加一張）
+    return this.addImage(dataUrl);
+  }
+  /* v139：新增一張底圖，回傳 image 物件 */
+  addImage(dataUrl) {
+    const pg = this.page;
+    const imgs = this._migrateImages(pg);
+    const im = {
+      id: 'img_' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36),
+      src: dataUrl, x: 0, y: 0, s: 1, _el: null
+    };
+    imgs.push(im);
+    this._emit('image', { page: this.pageIndex, action: 'add', id: im.id });
+    this.ensureImage(pg, im, () => this.render());
     this.render();
+    return im;
+  }
+  /* v139：刪除指定圖片 */
+  removeImage(id) {
+    const pg = this.page;
+    const imgs = this._migrateImages(pg);
+    const i = imgs.findIndex(im => im.id === id);
+    if (i >= 0) {
+      imgs.splice(i, 1);
+      this._emit('image', { page: this.pageIndex, action: 'remove', id });
+      this.render();
+      return true;
+    }
+    return false;
   }
   clearImage() {
-    this.page.image = null;
+    const pg = this.page;
+    this._migrateImages(pg);
+    pg.images = [];
+    pg.image = null;
     this._emit('image', { page: this.pageIndex, dataUrl: null });
     this.render();
   }
@@ -304,15 +453,17 @@ class Board {
     this.render();
   }
   clearPage(keepImage = true) {
-    if (!this.page.strokes.length && !this.page.image) return;
     const pg = this.page;
+    const imgs = this._migrateImages(pg);
+    if (!pg.strokes.length && !imgs.length && !pg.image) return;
     pg.strokes = [];
     pg.undo = [];
     pg.redo = [];
     // v74：預設保留底圖（清除筆跡≠清除圖片）；只有刪到剩最後一頁時才清圖片
+    // v139：多圖
     if (!keepImage) {
       pg.image = null;
-      pg._imgEl = null;
+      pg.images = [];
       pg.imgS = 1; pg.imgX = 0; pg.imgY = 0;
     }
     // v47：清除該頁時間軸（事件＋標記＋時鐘重置，下次從 00:00 開始）
@@ -340,16 +491,21 @@ class Board {
   }
   _pos(e, rect) {
     const r = rect || this.canvas.getBoundingClientRect();
-    const sx = e.clientX - r.left, sy = e.clientY - r.top;
+    // v142：手機瀏覽器 UI 收合時，顯示尺寸可能跟 resize 時的 _cssW/H 脫鉤
+    // 先把螢幕座標換算回邏輯尺寸，再做後續轉換，避免點位偏移
+    const sx = (e.clientX - r.left) * (this._cssW / (r.width || 1));
+    const sy = (e.clientY - r.top) * (this._cssH / (r.height || 1));
     // v42：螢幕座標 → 畫布座標（考慮縮放平移），再轉正規化座標
     const v = this.view;
     const cx = (sx - v.ox) / v.scale, cy = (sy - v.oy) / v.scale;
-    return { x: sx, y: sy, cx, cy, fx: cx / r.width, fy: cy / r.height };
+    return { x: sx, y: sy, cx, cy, fx: cx / this._cssW, fy: cy / this._cssH };
   }
   /* 形狀拖曳開始：快照畫布，拖曳中只還原快照＋畫預覽，不重繪整頁（v19） */
   _beginShapeDrag(d) {
     this._shapeDrag = d;
     this._shapeSnap = null;
+    // v141：不在這裡清選取——第一指下去可能是雙指手勢的前半，清掉會導致雙指轉失效
+    // 新圖形建好時會自動取代選取（v127），小拖曳沒建成則保留舊選取
     try {
       const c = document.createElement('canvas');
       c.width = this.canvas.width; c.height = this.canvas.height;
@@ -426,6 +582,8 @@ class Board {
      v110：silent=true 時不發時間軸事件（手勢連續旋轉用，結束時統一發一次） */
   rotateSelection(angleDeg, silent) {
     if (!this._lassoSel || !this._lassoSel.length) return;
+    // v142：直線/箭頭不需要旋轉
+    if (this._lassoSel.length === 1 && (this._lassoSel[0].shape === 'line' || this._lassoSel[0].shape === 'arrow')) return;
     const bb = this._lassoBBox();
     if (!bb) return;
     const W = this._cssW, H = this._cssH;
@@ -516,6 +674,38 @@ class Board {
     }
     return { x0, y0, x1, y1 };
   }
+  /* v133：中心移動把手的螢幕座標（供點擊判斷），無選取回傳 null */
+  _centerHandleScreen() {
+    const bb = this._lassoBBox();
+    if (!bb) return null;
+    const v = this.view;
+    return {
+      x: (bb.x0 + bb.x1) / 2 * v.scale + v.ox,
+      y: (bb.y0 + bb.y1) / 2 * v.scale + v.oy
+    };
+  }
+  /* v133：點到中心把手→開始拖曳整個選取（任何工具下都可用） */
+  _centerDragDown(p) {
+    if (!this._lassoSel || !this._lassoSel.length) return false;
+    const h = this._centerHandleScreen();
+    if (!h) return false;
+    // p.x/p.y 是螢幕座標；把手半徑 14，點擊判定放寬到 26
+    if (Math.hypot(p.x - h.x, p.y - h.y) > 26) return false;
+    this._lassoDrag = { x0: p.cx, y0: p.cy, moved: false,
+      orig: this._lassoSel.map(s => ({ s, fx: s.fx, fy: s.fy,
+        fx0: s.fx0, fy0: s.fy0, fx1: s.fx1, fy1: s.fy1,
+        pts: s.pts ? s.pts.map(pt => [pt[0], pt[1], pt[2]]) : null })) };
+    for (const s of this._lassoSel) {
+      if (s._origFx === undefined) {
+        s._origFx = s.fx; s._origFy = s.fy; s._origRot = s.rot || 0;
+        s._origFx0 = s.fx0; s._origFy0 = s.fy0;
+        s._origFx1 = s.fx1; s._origFy1 = s.fy1;
+        s._origPts = s.pts ? s.pts.map(pt => [pt[0], pt[1], pt[2]]) : null;
+      }
+    }
+    this.pokeActivity();
+    return true;
+  }
   /* 取筆跡的所有關鍵點（像素座標），供包圍盒與套索包含測試
      v111：shape/text 若有 s.rot，回傳旋轉後的四角（選取框才會跟著轉） */
   _strokePointsPx(s, W, H) {
@@ -578,41 +768,84 @@ class Board {
     this.pokeActivity();
     const rect = this.canvas.getBoundingClientRect();
     const px = e.clientX - rect.left, py = e.clientY - rect.top;
-    this._pointers.set(e.pointerId, { x: px, y: py });
+    this._pointers.set(e.pointerId, { x: px, y: py, type: e.pointerType }); // v129：記類型，供雙指手勢判斷
     const now = performance.now();
+    // v143：裁切模式 — 單指操作裁切框（不支援雙指）
+    if (this.cropMode && this._crop) {
+      const p = this._pos(e, rect);
+      // 先測把手（canvas 座標轉螢幕：把手在 canvas 座標系，需經 view 變換）
+      const v = this.view;
+      let hitHandle = null;
+      for (const h of this._cropHandles()) {
+        const hsx = h.x * v.scale + v.ox, hsy = h.y * v.scale + v.oy;
+        if (Math.hypot(px - hsx, py - hsy) < 28) { hitHandle = h.id; break; }
+      }
+      const cb = this._cropBounds();
+      if (hitHandle) {
+        this._cropDrag = { handle: hitHandle, fx0: this._crop.fx0, fy0: this._crop.fy0, fx1: this._crop.fx1, fy1: this._crop.fy1, cx: p.cx, cy: p.cy };
+      } else if (cb) {
+        // 轉成螢幕座標判斷是否在框內
+        const sx0 = cb.x0 * v.scale + v.ox, sy0 = cb.y0 * v.scale + v.oy;
+        const sx1 = cb.x1 * v.scale + v.ox, sy1 = cb.y1 * v.scale + v.oy;
+        if (px >= sx0 && px <= sx1 && py >= sy0 && py <= sy1) {
+          this._cropDrag = { move: true, fx0: this._crop.fx0, fy0: this._crop.fy0, fx1: this._crop.fx1, fy1: this._crop.fy1, cx: p.cx, cy: p.cy };
+        }
+      }
+      return; // 裁切模式不做別的事
+    }
     // v42：雙指手勢（縮放／平移）優先於 v20 雙指復原
     if (this._pointers.size === 2) {
-      // 取消進行中的繪製（暫存，供之後判斷是否為輕觸復原）
-      if (this._drawing || this._erasing || this._shapeDrag) {
-        this._pinchCandidate = { drawing: this._drawing, t0: now };
-        this._drawing = null; this._erasing = null; this._shapeDrag = null;
-        this._shapeSnap = null;
-        this.render();
+      const [q1, q2] = [...this._pointers.values()];
+      // v129：兩指須同類型才算手勢（避免手掌 touch＋筆 pen 誤觸成縮放）
+      if (q1.type !== q2.type) {
+        // 刪掉 touch 那個（手掌），剩下的走單指流程
+        for (const [id, q] of this._pointers) {
+          if (q.type === 'touch') { this._pointers.delete(id); break; }
+        }
       } else {
-        this._pinchCandidate = { drawing: null, t0: now };
+        // 取消進行中的繪製（暫存，供之後判斷是否為輕觸復原）
+        // v136：手抓文字拖曳也要取消，否則雙指縮放被卡住
+        if (this._drawing || this._erasing || this._shapeDrag || this._handDrag) {
+          this._pinchCandidate = { drawing: this._drawing, t0: now };
+          this._drawing = null; this._erasing = null; this._shapeDrag = null;
+          this._handDrag = null;
+          this._shapeSnap = null;
+          this.render();
+        } else {
+          this._pinchCandidate = { drawing: null, t0: now };
+        }
+        const [p1, p2] = [...this._pointers.values()];
+        this._pinch = {
+          d0: Math.max(1, Math.hypot(p2.x - p1.x, p2.y - p1.y)),
+          a0: Math.atan2(p2.y - p1.y, p2.x - p1.x),  // v110：雙指旋轉用
+          scale0: this.view.scale,
+          mx0: (p1.x + p2.x) / 2, my0: (p1.y + p2.y) / 2,
+          ox0: this.view.ox, oy0: this.view.oy,
+          // v139：多圖 — 用選中圖片的縮放當基準
+          imgS0: (() => { const s = this._imgById(this.page, this.imgSelId); return (s && s.s) || 1; })(),
+          moved: false
+        };
+        return;
       }
-      const [p1, p2] = [...this._pointers.values()];
-      this._pinch = {
-        d0: Math.max(1, Math.hypot(p2.x - p1.x, p2.y - p1.y)),
-        a0: Math.atan2(p2.y - p1.y, p2.x - p1.x),  // v110：雙指旋轉用
-        scale0: this.view.scale,
-        mx0: (p1.x + p2.x) / 2, my0: (p1.y + p2.y) / 2,
-        ox0: this.view.ox, oy0: this.view.oy,
-        imgS0: this.page.imgS || 1,  // v73：底圖調整用
-        moved: false
-      };
-      return;
     }
     if (this._pointers.size > 2) return;  // 三指以上忽略
     // v76：Apple Pencil / 手指分離（防手掌誤觸）
     // fingerDraw=false 時，只有 pen（Apple Pencil）和 mouse 能畫圖，touch（手指/手掌）忽略
-    if (!this.fingerDraw && e.pointerType === 'touch') {
-      // 單指 touch 不畫圖，直接返回（雙指縮放已在上方處理）
-      this._pointers.delete(e.pointerId);
-      return;
+    // v128：底圖調整模式除外——調圖本來就是用手指，雙指縮放不受 ✋ 開關影響
+    // v129：有筆跡選取時也除外——雙指旋轉/移動是操作手勢不是寫字，不用擋
+    const hasSel = this._lassoSel && this._lassoSel.length;
+    // v138：fingerDraw 關閉時，touch 不畫圖但留在 _pointers 裡，雙指縮放照常用
+    // （v129 的同類型檢查會擋掉手掌＋筆的誤觸，不用擔心）
+    if (!this.fingerDraw && e.pointerType === 'touch' && !this.imgAdjust) {
+      const p138 = this._pos(e);
+      // 中心把手例外：手指可拖曳移動選取
+      if (hasSel && this._centerDragDown(p138)) return;
+      return; // 不畫圖，但保留在 _pointers 供雙指手勢用
     }
     // v20：雙指輕觸＝復原上一步（已由上方雙指邏輯接管，此處保留單指流程）
     const p = this._pos(e);
+    // v141：中心把手拖曳（筆/滑鼠/手指都可用）——v138 改壞漏掉這行，補回
+    if (hasSel && this._centerDragDown(p)) return;
     // 規尺本體（移動／旋轉）：交給 app.js 的 overlay 手勢
     if (this.overlayHit && this.overlayHit(p)) { if (this.onOverlayDown) this.onOverlayDown(p); return; }
     if (this.tool === 'laser') { this._laser(p.x, p.y); return; }
@@ -623,10 +856,19 @@ class Board {
       return;
     }
     // v73：底圖調整模式—單指拖曳移動底圖（不繪製）
-    if (this.imgAdjust && this.page.image) {
+    // v139：多圖 — 點哪張選哪張，拖曳移動選中的圖
+    if (this.imgAdjust) {
       const pg = this.page;
-      this._imgDrag = { x0: px, y0: py, imgX0: pg.imgX || 0, imgY0: pg.imgY || 0 };
-      return;
+      const imgs = this._migrateImages(pg);
+      if (imgs.length) {
+        const hit = this._imgHitTest(px, py);
+        if (hit) this.imgSelId = hit.id;
+        const sel = this._imgById(pg, this.imgSelId) || imgs[imgs.length - 1];
+        this.imgSelId = sel.id;
+        this._imgDrag = { id: sel.id, x0: px, y0: py, imgX0: sel.x || 0, imgY0: sel.y || 0 };
+        this.render(); // 重畫以更新選中高亮
+        return;
+      }
     }
     if (this.onDrawStart) this.onDrawStart();
     // v104：手抓工具—拖曳移動文字（不繪製）
@@ -676,10 +918,42 @@ class Board {
     if (this._drawing || this._erasing || this._shapeDrag) {
       this._lastActivity = performance.now();
     }
+    // v143：裁切拖曳
+    if (this._cropDrag && this.cropMode) {
+      const rect = this.canvas.getBoundingClientRect();
+      const p = this._pos(e, rect);
+      const d = this._cropDrag;
+      const dx = (p.cx - d.cx), dy = (p.cy - d.cy);
+      // 轉成正規化座標的位移（相對於圖片顯示尺寸）
+      const im = this._imgById(this.page, this.cropId);
+      const b = im ? this._imgBounds(im) : null;
+      if (b) {
+        const bw = b.x1 - b.x0, bh = b.y1 - b.y0;
+        const dfx = dx / bw, dfy = dy / bh;
+        const c = this._crop;
+        if (d.move) {
+          // 整框移動，限制不超出圖片
+          const w = d.fx1 - d.fx0, h = d.fy1 - d.fy0;
+          let nx0 = Math.min(1 - w, Math.max(0, d.fx0 + dfx));
+          let ny0 = Math.min(1 - h, Math.max(0, d.fy0 + dfy));
+          c.fx0 = nx0; c.fy0 = ny0; c.fx1 = nx0 + w; c.fy1 = ny0 + h;
+        } else {
+          // 把手縮放
+          const hdl = d.handle;
+          if (hdl.includes('w')) c.fx0 = Math.min(d.fx1 - 0.02, Math.max(0, d.fx0 + dfx));
+          if (hdl.includes('e')) c.fx1 = Math.max(d.fx0 + 0.02, Math.min(1, d.fx1 + dfx));
+          if (hdl.includes('n')) c.fy0 = Math.min(d.fy1 - 0.02, Math.max(0, d.fy0 + dfy));
+          if (hdl.includes('s')) c.fy1 = Math.max(d.fy0 + 0.02, Math.min(1, d.fy1 + dfy));
+        }
+        this.render();
+      }
+      return;
+    }
     // v42：更新 pointer 位置；雙指縮放／平移
     if (this._pointers.has(e.pointerId)) {
       const rect = this.canvas.getBoundingClientRect();
-      this._pointers.set(e.pointerId, { x: e.clientX - rect.left, y: e.clientY - rect.top });
+      const old = this._pointers.get(e.pointerId);
+      this._pointers.set(e.pointerId, { x: e.clientX - rect.left, y: e.clientY - rect.top, type: old.type }); // v130：保留 type，否則雙指被誤判
     }
     // v104：手抓拖曳文字
     if (this._handDrag) {
@@ -730,8 +1004,12 @@ class Board {
       const rect = this.canvas.getBoundingClientRect();
       const px = e.clientX - rect.left, py = e.clientY - rect.top;
       const d = this._imgDrag, pg = this.page;
-      pg.imgX = d.imgX0 + (px - d.x0);
-      pg.imgY = d.imgY0 + (py - d.y0);
+      // v139：多圖 — 移動選中的那張
+      const im = this._imgById(pg, d.id);
+      if (im) {
+        im.x = d.imgX0 + (px - d.x0);
+        im.y = d.imgY0 + (py - d.y0);
+      }
       this.render();
       return;
     }
@@ -740,7 +1018,12 @@ class Board {
       const d = Math.max(1, Math.hypot(p2.x - p1.x, p2.y - p1.y));
       const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
       const pc = this._pinch;
-      if (!pc.moved && (Math.abs(d - pc.d0) > 12 || Math.hypot(mx - pc.mx0, my - pc.my0) > 12)) {
+      // v131：純旋轉時距離/中點都不變，也要算成 moved，否則旋轉永遠不觸發
+      const aNow = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+      let daNow = (aNow - pc.a0) * 180 / Math.PI;
+      if (daNow > 180) daNow -= 360;
+      if (daNow < -180) daNow += 360;
+      if (!pc.moved && (Math.abs(d - pc.d0) > 12 || Math.hypot(mx - pc.mx0, my - pc.my0) > 12 || Math.abs(daNow) > 5)) {
         pc.moved = true;
         this._pinchCandidate = null;  // 移動了＝縮放手勢，不是輕觸復原
       }
@@ -759,10 +1042,15 @@ class Board {
           }
         }
         // v73：底圖調整模式時，雙指縮放底圖（不動視圖）
-        if (this.imgAdjust && this.page.image) {
+        // v139：多圖 — 縮放選中的那張
+        if (this.imgAdjust) {
           const pg = this.page;
-          pg.imgS = Math.max(0.2, Math.min(5, (pc.imgS0 || pg.imgS || 1) * d / pc.d0));
-          this.render();
+          const imgs = this._migrateImages(pg);
+          const sel = this._imgById(pg, this.imgSelId) || imgs[imgs.length - 1];
+          if (sel) {
+            sel.s = Math.max(0.2, Math.min(5, (pc.imgS0 || sel.s || 1) * d / pc.d0));
+            this.render();
+          }
         } else {
           const v = this.view;
           const newScale = Math.max(0.5, Math.min(5, pc.scale0 * d / pc.d0));
@@ -843,6 +1131,8 @@ class Board {
     this._pointers.delete(e.pointerId);
     // v73：底圖拖曳結束
     if (this._imgDrag) this._imgDrag = null;
+    // v143：裁切拖曳結束
+    if (this._cropDrag) this._cropDrag = null;
     if (this._pinch) {
       if (this._pointers.size < 2) {
         // 雙指輕觸（未移動、350ms 內）＝復原（v20 行為）
@@ -852,6 +1142,15 @@ class Board {
           if (dt < 350 && d && !d._moved) {
             this.render();  // 清掉首指的落筆點
             this.undo();
+            // v135：第一次用雙指輕觸復原，提示這個手勢（每台裝置只提示一次）
+            try {
+              if (!localStorage.getItem('moke_hint_tap2undo')) {
+                localStorage.setItem('moke_hint_tap2undo', '1');
+                if (typeof window !== 'undefined' && window._mokeToast) {
+                  setTimeout(() => window._mokeToast('💡 雙指輕觸＝復原上一步', 2500), 600);
+                }
+              }
+            } catch (err) {}
           }
           // 若有未完成的繪製（非輕觸），直接丟棄（已在 _down 時 render 清掉）
         }
@@ -892,6 +1191,16 @@ class Board {
           dur: Math.round(performance.now() - d.t)
         });
         this.addStroke(s);
+        // v127：圖形畫完自動選取，可直接按 ⟲⟳ 或雙指旋轉，不用先套索
+        this._lassoSel = [s];
+        if (typeof window !== 'undefined' && window._mokeUpdateRotateBtns) window._mokeUpdateRotateBtns();
+        // v131：底部提示可旋轉
+        // v134：提示加全——按鈕旋轉、雙指旋轉、中心拖曳一次講清楚
+        // v142：直線/箭頭不提示旋轉
+        const tipMsg = (s.shape === 'line' || s.shape === 'arrow')
+          ? '按住中心可拖曳移動'
+          : '點上面 ⟲⟳ 或雙指可旋轉，按住中心可拖曳';
+        if (typeof window !== 'undefined' && window._mokeToast) window._mokeToast(tipMsg, 3000);
       }
     }
     else if (this._drawing) {
@@ -927,6 +1236,13 @@ class Board {
         this._lassoSel = null;  // 太短，當作點一下→取消選取
       }
       if (typeof window !== 'undefined' && window._mokeUpdateRotateBtns) window._mokeUpdateRotateBtns();
+      // v135：選到東西就提示操作方式
+      // v142：單選直線/箭頭不提示旋轉
+      if (this._lassoSel && this._lassoSel.length && typeof window !== 'undefined' && window._mokeToast) {
+        const sel = this._lassoSel;
+        const isLine = sel.length === 1 && (sel[0].shape === 'line' || sel[0].shape === 'arrow');
+        window._mokeToast(isLine ? '已選取：按住中心可拖曳' : '已選取：點上面 ⟲⟳ 或雙指可旋轉，按住中心可拖曳', 3000);
+      }
       this.render();
     }
     // v105：套索拖曳結束—為每個移動的筆跡記時間軸事件
@@ -1032,12 +1348,70 @@ class Board {
     ctx.clearRect(0, 0, W, H);
     ctx.setTransform(dpr * v.scale, 0, 0, dpr * v.scale, dpr * v.ox, dpr * v.oy);
     this._drawBg(ctx, pg, W, H);
-    if (pg.image && pg._imgEl) {
-      const img = pg._imgEl;
-      // v73：底圖可調大小/位置（imgS 縮放、imgX/imgY 位移）
-      const s = Math.min(W / img.naturalWidth, H / img.naturalHeight) * (pg.imgS || 1);
-      const dw = img.naturalWidth * s, dh = img.naturalHeight * s;
-      ctx.drawImage(img, (W - dw) / 2 + (pg.imgX || 0), (H - dh) / 2 + (pg.imgY || 0), dw, dh);
+    // v139：多圖疊放，依序繪製（後放的在上層）
+    const imgs = this._migrateImages(pg);
+    for (const im of imgs) {
+      if (im._el && im._el.naturalWidth) {
+        const img = im._el;
+        const s = Math.min(W / img.naturalWidth, H / img.naturalHeight) * (im.s || 1);
+        const dw = img.naturalWidth * s, dh = img.naturalHeight * s;
+        ctx.drawImage(img, (W - dw) / 2 + (im.x || 0), (H - dh) / 2 + (im.y || 0), dw, dh);
+      }
+    }
+    // v139：調整模式下，每張圖顯示中心點（選中的高亮）
+    if (this.imgAdjust && imgs.length) {
+      for (const im of imgs) {
+        const b = this._imgBounds(im);
+        if (!b) continue;
+        const isSel = im.id === this.imgSelId;
+        ctx.beginPath(); ctx.arc(b.cx, b.cy, isSel ? 16 : 12, 0, Math.PI * 2);
+        ctx.fillStyle = isSel ? '#1971c2' : 'rgba(25,113,194,0.45)';
+        ctx.fill();
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.stroke();
+        // 中心十字
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+        const r = isSel ? 8 : 6;
+        ctx.beginPath();
+        ctx.moveTo(b.cx - r, b.cy); ctx.lineTo(b.cx + r, b.cy);
+        ctx.moveTo(b.cx, b.cy - r); ctx.lineTo(b.cx, b.cy + r);
+        ctx.stroke();
+      }
+    }
+    // v143：裁切模式 — 遮罩＋裁切框＋八把手
+    if (this.cropMode && this._crop) {
+      const cb = this._cropBounds();
+      const im = this._imgById(pg, this.cropId);
+      const ib = im ? this._imgBounds(im) : null;
+      if (cb && ib) {
+        // 圖片範圍外變暗（只蓋住圖片區域）
+        ctx.save();
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(ib.x0, ib.y0, ib.x1 - ib.x0, cb.y0 - ib.y0); // 上
+        ctx.fillRect(ib.x0, cb.y1, ib.x1 - ib.x0, ib.y1 - cb.y1); // 下
+        ctx.fillRect(ib.x0, cb.y0, cb.x0 - ib.x0, cb.y1 - cb.y0); // 左
+        ctx.fillRect(cb.x1, cb.y0, ib.x1 - cb.x1, cb.y1 - cb.y0); // 右
+        ctx.restore();
+        // 裁切框線
+        ctx.save();
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+        ctx.setLineDash([10, 8]);
+        ctx.strokeRect(cb.x0, cb.y0, cb.x1 - cb.x0, cb.y1 - cb.y0);
+        ctx.setLineDash([]);
+        // 三分線
+        ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 1;
+        const tw = (cb.x1 - cb.x0) / 3, th = (cb.y1 - cb.y0) / 3;
+        for (let i = 1; i < 3; i++) {
+          ctx.beginPath(); ctx.moveTo(cb.x0 + tw * i, cb.y0); ctx.lineTo(cb.x0 + tw * i, cb.y1); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(cb.x0, cb.y0 + th * i); ctx.lineTo(cb.x1, cb.y0 + th * i); ctx.stroke();
+        }
+        // 八把手
+        for (const h of this._cropHandles()) {
+          ctx.beginPath(); ctx.arc(h.x, h.y, 12, 0, Math.PI * 2);
+          ctx.fillStyle = '#fff'; ctx.fill();
+          ctx.strokeStyle = '#1971c2'; ctx.lineWidth = 3; ctx.stroke();
+        }
+        ctx.restore();
+      }
     }
     for (const s of pg.strokes) {
       // v47：時間軸回放時只顯示 cutoff 之前的筆跡
@@ -1075,6 +1449,9 @@ class Board {
     if (this._lassoSel && this._lassoSel.length) {
       const bb = this._lassoBBox();
       if (bb) {
+        // v142：單選直線/箭頭不顯示旋轉把手
+        const sel142 = this._lassoSel;
+        const noRotate142 = sel142.length === 1 && (sel142[0].shape === 'line' || sel142[0].shape === 'arrow');
         const dpr2 = window.devicePixelRatio || 1;
         const v2 = this.view;
         ctx.save();
@@ -1084,6 +1461,46 @@ class Board {
         const x1 = bb.x1 * v2.scale + v2.ox, y1 = bb.y1 * v2.scale + v2.oy;
         ctx.strokeRect(x0 - 8, y0 - 8, (x1 - x0) + 16, (y1 - y0) + 16);
         ctx.setLineDash([]);
+        // v132：選取框右上/左下加旋轉把手（圓形箭頭），提示可雙指旋轉
+        if (!noRotate142) {
+        const handle = (hx, hy) => {
+          ctx.beginPath(); ctx.arc(hx, hy, 14, 0, Math.PI * 2);
+          ctx.fillStyle = '#fff'; ctx.fill();
+          ctx.strokeStyle = '#e67700'; ctx.lineWidth = 2.5; ctx.stroke();
+          // 圓形箭頭
+          ctx.beginPath(); ctx.arc(hx, hy, 7, -2.4, 1.1); ctx.stroke();
+          const ax = hx + 7 * Math.cos(1.1), ay = hy + 7 * Math.sin(1.1);
+          ctx.beginPath();
+          ctx.moveTo(ax, ay);
+          ctx.lineTo(ax - 6, ay - 1);
+          ctx.moveTo(ax, ay);
+          ctx.lineTo(ax + 1, ay - 6);
+          ctx.stroke();
+        };
+        handle(x1 + 8, y0 - 8);  // 右上
+        handle(x0 - 8, y1 + 8);  // 左下
+        } // v142: noRotate142 結束
+        // v133：中心移動把手（四向箭頭）
+        const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+        ctx.beginPath(); ctx.arc(cx, cy, 14, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff'; ctx.fill();
+        ctx.strokeStyle = '#1971c2'; ctx.lineWidth = 2.5; ctx.stroke();
+        // 四向箭頭
+        ctx.beginPath();
+        ctx.moveTo(cx - 8, cy); ctx.lineTo(cx + 8, cy);
+        ctx.moveTo(cx, cy - 8); ctx.lineTo(cx, cy + 8);
+        ctx.stroke();
+        // 箭頭尖
+        const arrow = (x, y, dx, dy) => {
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(x - dx * 5 - dy * 3, y - dy * 5 + dx * 3);
+          ctx.moveTo(x, y);
+          ctx.lineTo(x - dx * 5 + dy * 3, y - dy * 5 - dx * 3);
+          ctx.stroke();
+        };
+        arrow(cx + 8, cy, 1, 0); arrow(cx - 8, cy, -1, 0);
+        arrow(cx, cy + 8, 0, 1); arrow(cx, cy - 8, 0, -1);
         ctx.restore();
       }
     }
@@ -1367,9 +1784,12 @@ class Board {
       const idx = Math.max(0, Math.min(data.page | 0, pages.length));
       const pg = this._newPage(data.bg || 'white');
       pg.image = data.image || null;
+      // v139：多圖
+      if (data.images) pg.images = data.images.map(im => ({ id: im.id, src: im.src, x: im.x || 0, y: im.y || 0, s: im.s || 1, _el: null }));
       pages.splice(idx, 0, pg);
       if (idx <= this.pageIndex) this.pageIndex++;
-      if (pg.image) this.ensureImage(pg, () => this.render());
+      this._migrateImages(pg);
+      this.ensureImage(pg, () => this.render());
     } else if (evt === 'delpage') {
       const idx = data.page | 0;
       if (pages.length > 1 && pages[idx]) {
@@ -1401,27 +1821,60 @@ class Board {
       } else if (evt === 'bg') {
         pg.bg = data.bg;
       } else if (evt === 'image') {
-        pg.image = data.dataUrl;
-        if (data.dataUrl) this.ensureImage(pg, () => this.render());
-        else pg._imgEl = null;
+        // v139：多圖同步
+        if (data.action === 'add' && data.id) {
+          const imgs = this._migrateImages(pg);
+          // dataUrl 太大不走同步，來賓端需自行處理；這裡只記佔位
+          if (!imgs.find(im => im.id === data.id)) {
+            imgs.push({ id: data.id, src: null, x: 0, y: 0, s: 1, _el: null });
+          }
+        } else if (data.action === 'remove' && data.id) {
+          const imgs = this._migrateImages(pg);
+          const i = imgs.findIndex(im => im.id === data.id);
+          if (i >= 0) imgs.splice(i, 1);
+        } else {
+          // 舊格式相容
+          pg.image = data.dataUrl;
+          if (data.dataUrl) this.ensureImage(pg, () => this.render());
+        }
       }
     }
     this.render();
   }
 
-  /* 底圖圖片載入（重播/匯入時用） */
-  ensureImage(page, cb) {
-    if (!page.image || page._imgEl) { cb && cb(); return; }
-    const img = new Image();
-    img.onload = () => { page._imgEl = img; cb && cb(); };
-    img.onerror = () => { cb && cb(); };
-    img.src = page.image;
+  /* 底圖圖片載入（重播/匯入時用）— v139：支援單張 im 或整頁 */
+  ensureImage(page, imOrCb, cb) {
+    // 新用法：ensureImage(pg, im, cb)
+    if (imOrCb && typeof imOrCb === 'object' && imOrCb.src) {
+      const im = imOrCb;
+      if (im._el) { cb && cb(); return; }
+      const img = new Image();
+      img.onload = () => { im._el = img; cb && cb(); };
+      img.onerror = () => { cb && cb(); };
+      img.src = im.src;
+      return;
+    }
+    // 舊用法相容：ensureImage(pg, cb) — 載入全部
+    const callback = typeof imOrCb === 'function' ? imOrCb : cb;
+    const imgs = this._migrateImages(page);
+    let pending = imgs.filter(im => !im._el).length;
+    if (!pending) { callback && callback(); return; }
+    for (const im of imgs) {
+      if (im._el) continue;
+      this.ensureImage(page, im, () => {
+        if (--pending <= 0) { callback && callback(); }
+      });
+    }
   }
 
   /* 序列化（課程檔用）：圖片已在 page.image */
   serialize() {
+    // v139：多圖 — 存 images 陣列（id, src, x, y, s；_el 不存）
+    const imgs = this._migrateImages(this.page);
     return {
-      bg: this.page.bg, image: this.page.image,
+      bg: this.page.bg,
+      image: this.page.image, // 舊格式相容保留
+      images: imgs.map(im => ({ id: im.id, src: im.src, x: im.x || 0, y: im.y || 0, s: im.s || 1 })),
       strokes: this.page.strokes.map(s => {
         const o = Object.assign({}, s);
         delete o._startPerf;
