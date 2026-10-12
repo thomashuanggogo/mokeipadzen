@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v126';
+const APP_VERSION = 'v144';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -26,6 +26,37 @@ function todayStr() {
 }
 
 /* ---------- 主程式 ---------- */
+/* v144：iPad 全螢幕手勢退出防護（頂層，init 與 initGuestMode 共用）
+   iPadOS Safari 在全螢幕時，從螢幕頂部下滑是系統手勢，會直接離開全螢幕，
+   網頁擋不掉。做法：只有按 ⛶ 按鈕離開才算數，其他方式離開一律自動重進。 */
+let fsExitOK = false; // true＝這次是按按鈕離開，放行；false＝手勢誤觸，擋下
+function fsInFullscreen() {
+  return !!(document.fullscreenElement || document.webkitFullscreenElement);
+}
+function fsEnter() {
+  const el = document.documentElement;
+  try {
+    const p = el.requestFullscreen ? el.requestFullscreen()
+      : (el.webkitRequestFullscreen ? el.webkitRequestFullscreen() : null);
+    if (p && p.catch) p.catch(() => {});
+    return p;
+  } catch (e) { return null; }
+}
+function fsExitByButton() {
+  fsExitOK = true;
+  try {
+    if (document.exitFullscreen) document.exitFullscreen();
+    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+  } catch (e) { fsExitOK = false; }
+}
+function fsGuardExit() {
+  if (fsInFullscreen() || fsExitOK) { fsExitOK = false; return; }
+  // 手勢誤觸離開 → 自動回去，並提示用按鈕離開
+  toast('已擋下手勢退出：離開全螢幕請按 ⛶ 按鈕', 2200);
+  const p = fsEnter();
+  // iOS 偶爾要求手勢上下文才准重進；若被拒，提示使用者點 ⛶ 回去
+  if (p && p.catch) p.catch(() => toast('點 ⛶ 按鈕可回到全螢幕', 2500));
+}
 (function init() {
   const board = new Board($('board'));
 
@@ -279,12 +310,14 @@ function todayStr() {
     $('btn-fullscreen').style.display = 'none';
   }
   $('btn-fullscreen').onclick = () => {
-    const el = document.documentElement;
-    if (document.fullscreenElement) document.exitFullscreen();
-    else if (el.requestFullscreen) el.requestFullscreen();
-    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    // v144：離開全螢幕只認 ⛶ 按鈕；iPad 頂部下滑手勢由 fsGuardExit 擋下重進
+    if (fsInFullscreen()) fsExitByButton();
+    else fsEnter();
   };
-  document.addEventListener('fullscreenchange', () => board.resize());
+  // v144：fullscreenchange 兼做手勢退出防護（iPad 誤觸下滑離開時自動重進）
+  const onFsChange = () => { board.resize(); fsGuardExit(); };
+  document.addEventListener('fullscreenchange', onFsChange);
+  document.addEventListener('webkitfullscreenchange', onFsChange);
   $('btn-undo').onclick = () => board.undo();
   $('btn-redo').onclick = () => board.redo();
   // v20：畫布浮動鈕（寫字時拇指可及）
@@ -335,9 +368,10 @@ function todayStr() {
         const s = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
         c.width = Math.round(img.naturalWidth * s); c.height = Math.round(img.naturalHeight * s);
         c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-        // v72：先設 _imgEl 再 setImage（否則第一次 render 時圖片還沒好）
-        board.page._imgEl = img;
-        board.setImage(c.toDataURL('image/jpeg', 0.85));
+        // v139：多圖 — 新增並選中這張
+        const im = board.addImage(c.toDataURL('image/jpeg', 0.85));
+        im._el = img;
+        board.imgSelId = im.id;
         URL.revokeObjectURL(img.src);
         // v73：匯入後自動進入底圖調整模式
         enterImgAdjust();
@@ -348,10 +382,14 @@ function todayStr() {
   };
 
   /* ----- v106：底圖縮放按鈕（電腦無觸控可用） ----- */
+  /* v139：多圖 — 縮放選中的那張 */
   const imgZoom = (factor) => {
     const pg = board.page;
-    if (!pg || !pg.image) return;
-    pg.imgS = Math.max(0.2, Math.min(5, (pg.imgS || 1) * factor));
+    if (!pg) return;
+    const imgs = board._migrateImages(pg);
+    const sel = board._imgById(pg, board.imgSelId) || imgs[imgs.length - 1];
+    if (!sel) return;
+    sel.s = Math.max(0.2, Math.min(5, (sel.s || 1) * factor));
     board.render();
   };
   $('btn-img-zoom-in').onclick = () => imgZoom(1.2);
@@ -360,37 +398,107 @@ function todayStr() {
   $('btn-rotate-left').onclick = () => board.rotateSelection(-15);
   $('btn-rotate-right').onclick = () => board.rotateSelection(15);
   window._mokeUpdateRotateBtns = () => {
-    const show = !!(board._lassoSel && board._lassoSel.length);
+    const sel = board._lassoSel;
+    // v142：直線/箭頭不需要旋轉——單選線條時隱藏旋轉鈕
+    const isLine = sel && sel.length === 1 && (sel[0].shape === 'line' || sel[0].shape === 'arrow');
+    const show = !!(sel && sel.length) && !isLine;
     $('btn-rotate-left').classList.toggle('hidden', !show);
     $('btn-rotate-right').classList.toggle('hidden', !show);
   };
+  window._mokeToast = toast; // v131：供 board.js 顯示提示
   /* ----- v73：底圖調整模式（雙指縮放調大小、單指拖曳移位置） ----- */
   const enterImgAdjust = () => {
-    if (!board.page.image) { toast('本頁沒有底圖'); return; }
+    const imgs = board._migrateImages(board.page);
+    if (!imgs.length) { toast('本頁沒有底圖'); return; }
     board.imgAdjust = true;
+    // v139：預設選中最上層那張
+    if (!board._imgById(board.page, board.imgSelId)) {
+      board.imgSelId = imgs[imgs.length - 1].id;
+    }
+    document.body.classList.add('img-adjusting'); // v137：頂部變色提示調圖中
     $('btn-img-adjust').classList.add('hidden');
     $('btn-img-done').classList.remove('hidden');
     $('btn-img-zoom-in').classList.remove('hidden');
     $('btn-img-zoom-out').classList.remove('hidden');
-    toast('🖼️ 調整底圖：雙指縮放／＋－按鈕調大小、單指拖曳移位置', 3000);
+    $('btn-img-del').classList.remove('hidden'); // v139：刪除圖片鈕
+    $('btn-img-crop').classList.remove('hidden'); // v143：裁切鈕
+    toast('🔧 調整底圖：點選圖片、單指拖曳移位置、雙指縮放，調完按 ✓', 3500);
   };
   const exitImgAdjust = () => {
+    if (board.cropMode) board.exitCrop(); // v143：先離開裁切
     board.imgAdjust = false;
+    board.imgSelId = null;
+    document.body.classList.remove('img-adjusting');
     board._imgDrag = null;
     $('btn-img-done').classList.add('hidden');
     $('btn-img-zoom-in').classList.add('hidden');
     $('btn-img-zoom-out').classList.add('hidden');
+    $('btn-img-del').classList.add('hidden');
+    $('btn-img-crop').classList.add('hidden');
+    $('btn-img-crop-cancel').classList.add('hidden');
     updateImgAdjustBtn();
     board.render();
     toast('底圖調整完成');
   };
+  // v139：刪除選中的圖片
+  $('btn-img-del').onclick = () => {
+    if (board.imgSelId && board.removeImage(board.imgSelId)) {
+      board.imgSelId = null;
+      const imgs = board._migrateImages(board.page);
+      if (imgs.length) {
+        board.imgSelId = imgs[imgs.length - 1].id;
+        toast('已刪除圖片');
+      } else {
+        exitImgAdjust();
+        return;
+      }
+      board.render();
+    }
+  };
   const updateImgAdjustBtn = () => {
     // 有底圖且不在調整模式時，顯示「調整底圖」按鈕
-    const show = board.page.image && !board.imgAdjust;
+    // v139：多圖 — 檢查 images 陣列
+    const show = board._migrateImages(board.page).length > 0 && !board.imgAdjust;
     $('btn-img-adjust').classList.toggle('hidden', !show);
   };
   $('btn-img-adjust').onclick = enterImgAdjust;
-  $('btn-img-done').onclick = exitImgAdjust;
+  // v143：✓ 在裁切模式下＝套用裁切，否則＝離開調整
+  $('btn-img-done').onclick = () => {
+    if (board.cropMode) {
+      if (board.applyCrop()) {
+        exitCropMode();
+        toast('已裁切');
+      } else {
+        toast('裁切範圍太小');
+      }
+    } else {
+      exitImgAdjust();
+    }
+  };
+  // v143：進入裁切模式
+  $('btn-img-crop').onclick = () => {
+    if (!board.imgSelId) { toast('先點選一張圖片'); return; }
+    if (board.enterCrop(board.imgSelId)) {
+      $('btn-img-zoom-in').classList.add('hidden');
+      $('btn-img-zoom-out').classList.add('hidden');
+      $('btn-img-del').classList.add('hidden');
+      $('btn-img-crop').classList.add('hidden');
+      $('btn-img-crop-cancel').classList.remove('hidden');
+      toast('✂️ 拖曳把手調整裁切範圍，框內拖曳可移動，✓ 確認、✕ 取消', 4000);
+    } else {
+      toast('圖片還沒載入好，稍後再試');
+    }
+  };
+  // v143：取消裁切，回到調整模式
+  const exitCropMode = () => {
+    board.exitCrop();
+    $('btn-img-zoom-in').classList.remove('hidden');
+    $('btn-img-zoom-out').classList.remove('hidden');
+    $('btn-img-del').classList.remove('hidden');
+    $('btn-img-crop').classList.remove('hidden');
+    $('btn-img-crop-cancel').classList.add('hidden');
+  };
+  $('btn-img-crop-cancel').onclick = exitCropMode;
 
   /* ----- v81：點 logo 開使用說明 ----- */
   $('brand-help').onclick = () => openModal('modal-help');
@@ -427,7 +535,7 @@ function todayStr() {
     updatePageLabel();
     board.tlCutoff = null;  // 換頁回到即時全顯示
     // v73：換頁時退出底圖調整模式，更新調整按鈕
-    if (board.imgAdjust) { board.imgAdjust = false; $('btn-img-done').classList.add('hidden'); }
+    if (board.imgAdjust) { board.imgAdjust = false; document.body.classList.remove('img-adjusting'); $('btn-img-done').classList.add('hidden'); }
     updateImgAdjustBtn();
     board.render();
     if (TLC.active) {
@@ -655,6 +763,8 @@ function todayStr() {
       board.pages = l.pages.map(p => ({
         bg: p.bg, image: p.image || null, _imgEl: null,
         imgS: p.imgS || 1, imgX: p.imgX || 0, imgY: p.imgY || 0,
+        // v139：多圖 — 讀 images 陣列，沒有就從舊格式遷移
+        images: (p.images || []).map(im => ({ id: im.id, src: im.src, x: im.x || 0, y: im.y || 0, s: im.s || 1, _el: null })),
         strokes: JSON.parse(JSON.stringify(p.strokes || [])),
         undo: [], redo: [],
         tl: { events: [], stops: (p.stops || []).map(m => ({ id: m.id, strokeId: m.strokeId, label: m.label })), clock: null, unadded: [] }
@@ -663,6 +773,7 @@ function todayStr() {
       // 舊格式相容：盡力還原
       board.pages = (l.basePages || []).map(p => ({
         bg: p.bg, image: p.image, imgS: p.imgS || 1, imgX: p.imgX || 0, imgY: p.imgY || 0, strokes: JSON.parse(JSON.stringify(p.strokes || [])),
+        images: (p.images || []).map(im => ({ id: im.id, src: im.src, x: im.x || 0, y: im.y || 0, s: im.s || 1, _el: null })),
         undo: [], redo: [], tl: { events: [], stops: [], clock: null, unadded: [] }
       }));
     }
@@ -1399,6 +1510,10 @@ function todayStr() {
     navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
   }
   window.addEventListener('resize', () => board.resize());
+  // v142：手機瀏覽器 UI 收合時 window.resize 不一定觸發，用 visualViewport 補
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', () => board.resize());
+  }
   // v66：時間軸從工具箱下方開始，不蓋住筆刷工具
   function positionTlPull() {
     const tb = $('toolbar');
@@ -1465,11 +1580,15 @@ function initGuestMode(board, code) {
   const fs = document.createElement('button');
   fs.id = 'guest-fs'; fs.textContent = '⛶ 全螢幕';
   fs.onclick = () => {
-    const el = document.documentElement;
-    if (document.fullscreenElement) document.exitFullscreen();
-    else el.requestFullscreen && el.requestFullscreen();
+    // v144：離開全螢幕只認 ⛶ 按鈕；手勢誤觸由下方 fsGuardExit 擋下重進
+    if (fsInFullscreen()) fsExitByButton();
+    else fsEnter();
   };
   bar.appendChild(fs);
+  // v144：iPad 手勢退出防護（同主畫面）
+  const onGFsChange = () => { board.resize(); fsGuardExit(); };
+  document.addEventListener('fullscreenchange', onGFsChange);
+  document.addEventListener('webkitfullscreenchange', onGFsChange);
   window.addEventListener('resize', () => board.resize());
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});

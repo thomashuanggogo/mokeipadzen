@@ -27,7 +27,10 @@ button.primary:active { background: #1864ab; }
   overflow-x: auto; /* v82: 按鈕太多時可橫滑，不會被切掉 */
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none; /* Firefox 隱藏捲軸 */
+  transition: background .25s ease; /* v137: 調圖模式變色過渡 */
 }
+/* v137：底圖調整模式時頂部變橘色，一眼看出在調圖 */
+body.img-adjusting #topbar { background: #8a4b00; }
 #topbar::-webkit-scrollbar { display: none; } /* Chrome/Safari 隱藏捲軸 */
 .brand { font-size: 18px; font-weight: 700; white-space: nowrap; }
 #rec-controls { display: flex; align-items: center; gap: 6px; flex: 1; } /* v84: iPad 優先，間距縮小 */

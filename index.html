@@ -45,9 +45,12 @@
       <button id="btn-page-del" title="刪除本頁">🗑️</button>
       <button id="btn-bg" title="切換背景">🎨 <span class="btn-label">背景</span></button>
       <button id="btn-image" title="插入圖片為底圖">🖼️ <span class="btn-label">圖片</span></button>
-      <button id="btn-img-adjust" title="調整底圖大小/位置" class="hidden">🖼️ <span class="btn-label">調整底圖</span></button>
+      <button id="btn-img-adjust" title="調整底圖大小/位置" class="hidden">🔧 <span class="btn-label">調整底圖</span></button>
       <button id="btn-img-zoom-out" title="縮小底圖" class="hidden">➖</button>
       <button id="btn-img-zoom-in" title="放大底圖" class="hidden">➕</button>
+      <button id="btn-img-crop" title="裁切選中的圖片" class="hidden">✂️</button>
+      <button id="btn-img-del" title="刪除選中的圖片" class="hidden">🗑️</button>
+      <button id="btn-img-crop-cancel" title="取消裁切" class="hidden">✕ <span class="btn-label">取消</span></button>
       <button id="btn-img-done" title="完成底圖調整" class="hidden primary">✅ <span class="btn-label">完成</span></button>
       <button id="btn-rotate-left" title="逆時針旋轉選取（15°）" class="hidden">⟲</button>
       <button id="btn-rotate-right" title="順時針旋轉選取（15°）" class="hidden">⟳</button>
@@ -219,7 +222,7 @@
       <p><b>◀ 1/1 ▶</b>：翻頁，每頁有獨立時間軸。<b>＋</b> 新增一頁，<b>🗑️</b> 刪除本頁。</p>
       <p><b>── 頂部功能 ──</b></p>
       <p><b>🎨 背景</b>：白板／黑板／方格／橫線循環切換。</p>
-      <p><b>🖼️ 圖片</b>：選圖片當本頁底圖；<b>🖼️ 調整底圖</b>＋<b>➖➕</b> 重調大小位置，<b>✅</b> 完成固定。</p>
+      <p><b>🖼️ 圖片</b>：一頁可放多張圖疊放，後放的在上層；<b>🔧 調整底圖</b>進調整模式，每張圖中心有藍點，點哪張選哪張，單指拖曳移位置、雙指縮放，<b>✂️</b> 裁切選中的圖，<b>🗑️</b> 刪選中的圖，<b>✅</b> 完成固定。</p>
       <p><b>✋ 手指寫字</b>：開＝手指＋筆都能寫；關＝只留 Apple Pencil（防手掌誤觸）。</p>
       <p><b>🧹 清除</b>：刪光本頁筆跡和標記（底圖保留）。</p>
       <p><b>⤢ 100%</b>：畫布縮放平移回到原始位置。</p>
@@ -230,7 +233,7 @@
       <p><b>✋ 手抓</b>：拖曳移動文字。<b>🪢 套索</b>：畫圈框選多個筆跡一起移動；雙指可旋轉。</p>
       <p><b>🎨 顏色</b>（套索旁）：8 色＋粗細滑桿，點一下就換。</p>
       <p><b>✏️ 畫筆／🖍️ 螢光筆／🧽 橡皮擦</b>：橡皮擦是時間軸事件，重播看得到擦除過程。</p>
-      <p><b>➖ ➡️ ⬜ ◺ ▱ ⭕</b>：直線／箭頭／矩形／直角三角形／平行四邊形／橢圓，拖曳畫出。</p>
+      <p><b>➖ ➡️ ⬜ ◺ ▱ ⭕</b>：直線／箭頭／矩形／直角三角形／平行四邊形／橢圓，拖曳畫出。<b>畫完自動選取</b>，直接按 ⟲⟳ 或雙指旋轉，不用先套索。</p>
       <p><b>📊 座標軸</b>：一筆畫出 x-y 軸。<b>🔤 文字</b>：點畫布打字。</p>
       <p><b>🔴 雷射筆</b>：上課指示用，不會被記錄。</p>
       <p><b>📏 直尺／📐 量角器／🧭 圓規</b>：幾何作圖工具。</p>
