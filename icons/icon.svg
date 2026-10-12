@@ -1,7 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect x="16" y="16" width="480" height="480" rx="110" fill="#212529"/>
-  <path d="M120 340 C 180 200, 260 160, 380 140" stroke="#ffffff" stroke-width="44" stroke-linecap="round" fill="none"/>
-  <path d="M150 380 C 230 300, 300 280, 400 270" stroke="#868e96" stroke-width="22" stroke-linecap="round" fill="none" opacity="0.7"/>
-  <circle cx="392" cy="392" r="42" fill="#ff6b6b"/>
-  <circle cx="392" cy="392" r="18" fill="#ffffff"/>
+  <rect width="512" height="512" fill="#f7f7f4"/>
+  <rect x="3" y="3" width="506" height="506" fill="none" stroke="#cdcdc8" stroke-width="6"/>
+  <text x="246" y="264" font-family="'Noto Serif CJK TC','Noto Serif TC','Songti TC',serif" font-size="300" font-weight="700" fill="#1c1c1c" text-anchor="middle" dominant-baseline="central">墨</text>
+  <circle cx="392" cy="392" r="30" fill="#b5331f"/>
 </svg>
