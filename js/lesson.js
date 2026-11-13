@@ -389,7 +389,7 @@ class LessonEngine {
   }
   reset() {
     const pages = JSON.parse(this._base);
-    this.board.pages = pages.map(p => ({ bg: p.bg, image: p.image, strokes: p.strokes || [], undo: [], redo: [] }));
+    this.board.pages = pages.map(p => ({ bg: p.bg, image: p.image, lockBg: !!p.lockBg, strokes: p.strokes || [], undo: [], redo: [] }));
     this.board.pageIndex = this.lesson.startPage || 0;
     this.evIdx = 0;
     this.anims = new Map();
@@ -446,17 +446,22 @@ class LessonEngine {
     ctx.save();
     ctx.clearRect(0, 0, W, H);
     board._drawBg(ctx, pg, W, H);
+    let lockRect = null;
     if (pg.image && pg._imgEl) {
       const img = pg._imgEl;
       const s = Math.min(W / img.naturalWidth, H / img.naturalHeight);
       const dw = img.naturalWidth * s, dh = img.naturalHeight * s;
       ctx.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+      if (pg.lockBg) lockRect = { x: (W - dw) / 2, y: (H - dh) / 2, w: dw, h: dh };
     }
+    // v146：lockBg 頁筆跡改用底圖座標系（同 board.render）
+    if (lockRect) { ctx.save(); ctx.translate(lockRect.x, lockRect.y); ctx.scale(lockRect.w / W, lockRect.h / H); }
     for (const s of pg.strokes) {
       const a = this.anims.get(s.id);
       const prog = a ? Math.min(1, (nowMs - a.start) / Math.max(1, s.dur || 300)) : 1;
       board.drawStroke(ctx, s, prog, W, H);
     }
+    if (lockRect) ctx.restore();
     ctx.restore();
   }
 }

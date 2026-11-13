@@ -44,6 +44,9 @@ class Board {
     this._cropDrag = null; // {handle} 或 {move}
     // v76：手指寫字開關（預設關＝只有 Apple Pencil 能畫，防手掌誤觸）
     this.fingerDraw = true;  // v104：預設手指可寫（南勛：預設手寫，用 Apple Pencil 再按開關切換）
+    // v145：圖形自動辨識（畫圓/直線後停頓 0.6 秒自動變乾淨圖形，預設開；localStorage 可關）
+    this.autoShape = true;
+    this._autoShapeTimer = null;
     // 幾何規尺（v14）：由 app.js 設定
     this.ruler = null;            // {x,y,angle,len,wd} px，null=隱藏
     this.protractor = null;       // {x,y,angle,R} px，null=隱藏
@@ -338,6 +341,21 @@ class Board {
 
   _r4(v) { return Math.round(v * 10000) / 10000; } // 座標取小數4位，0.1px 精度，省一半空間
 
+  /* v145：鋼筆筆壓 — 讀 PointerEvent.pressure（Apple Pencil 0..1；滑鼠按住時 0.5；
+     無壓感/讀不到時 fallback 0.5＝等寬）。回傳 0..1（小數2位）。 */
+  _press(e) {
+    let p = (e && typeof e.pressure === 'number') ? e.pressure : 0.5;
+    if (!(p > 0)) p = 0.5;
+    if (p > 1) p = 1;
+    return Math.round(p * 100) / 100;
+  }
+  /* v145：該點的筆寬（px）— pressure 0.5＝標準寬度，0→0.35x，1→1.65x。
+     舊檔/無壓感（pt[3] 缺失）fallback 0.5，渲染與舊版完全一致。 */
+  _pressW(s, pt, k) {
+    const p = (pt.length > 3 && typeof pt[3] === 'number') ? pt[3] : 0.5;
+    return s.width * k * (0.35 + 1.3 * Math.max(0, Math.min(1, p)));
+  }
+
   addText(fx, fy, text, size) {
     if (!text || !text.trim()) return null;
     const s = this._newStroke('text', { fx: this._r4(fx), fy: this._r4(fy), text: text.trim(), size: size || this.textSize });
@@ -558,14 +576,14 @@ class Board {
         this._lassoDrag = { x0: p.cx, y0: p.cy, moved: false,
           orig: this._lassoSel.map(s => ({ s, fx: s.fx, fy: s.fy,
             fx0: s.fx0, fy0: s.fy0, fx1: s.fx1, fy1: s.fy1,
-            pts: s.pts ? s.pts.map(pt => [pt[0], pt[1], pt[2]]) : null })) };
+            pts: s.pts ? s.pts.map(pt => [pt[0], pt[1], pt[2], pt[3]]) : null })) };
         // 記原始位置（重播用）
         for (const s of this._lassoSel) {
           if (s._origFx === undefined) {
             s._origFx = s.fx; s._origFy = s.fy; s._origRot = s.rot || 0;
             s._origFx0 = s.fx0; s._origFy0 = s.fy0;
             s._origFx1 = s.fx1; s._origFy1 = s.fy1;
-            s._origPts = s.pts ? s.pts.map(pt => [pt[0], pt[1], pt[2]]) : null;
+            s._origPts = s.pts ? s.pts.map(pt => [pt[0], pt[1], pt[2], pt[3]]) : null;
           }
         }
         this.pokeActivity();
@@ -605,7 +623,7 @@ class Board {
         s._origFx = s.fx; s._origFy = s.fy;
         s._origFx0 = s.fx0; s._origFy0 = s.fy0;
         s._origFx1 = s.fx1; s._origFy1 = s.fy1;
-        s._origPts = s.pts ? s.pts.map(pt => [pt[0], pt[1], pt[2]]) : null;
+        s._origPts = s.pts ? s.pts.map(pt => [pt[0], pt[1], pt[2], pt[3]]) : null;
       }
       if (s.tool === 'text' && s.fx !== undefined) {
         const [nx, ny] = rotPx(s.fx * W, s.fy * H);
@@ -623,7 +641,7 @@ class Board {
       } else if (s.pts) {
         s.pts = s.pts.map(pt => {
           const [nx, ny] = rotPx(pt[1] * W, pt[2] * H);
-          return [pt[0], this._r4(nx / W), this._r4(ny / H)];
+          return [pt[0], this._r4(nx / W), this._r4(ny / H), pt[3]];
         });
       }
       // 發時間軸事件（silent 時跳過，手勢結束統一發）
@@ -694,13 +712,13 @@ class Board {
     this._lassoDrag = { x0: p.cx, y0: p.cy, moved: false,
       orig: this._lassoSel.map(s => ({ s, fx: s.fx, fy: s.fy,
         fx0: s.fx0, fy0: s.fy0, fx1: s.fx1, fy1: s.fy1,
-        pts: s.pts ? s.pts.map(pt => [pt[0], pt[1], pt[2]]) : null })) };
+        pts: s.pts ? s.pts.map(pt => [pt[0], pt[1], pt[2], pt[3]]) : null })) };
     for (const s of this._lassoSel) {
       if (s._origFx === undefined) {
         s._origFx = s.fx; s._origFy = s.fy; s._origRot = s.rot || 0;
         s._origFx0 = s.fx0; s._origFy0 = s.fy0;
         s._origFx1 = s.fx1; s._origFy1 = s.fy1;
-        s._origPts = s.pts ? s.pts.map(pt => [pt[0], pt[1], pt[2]]) : null;
+        s._origPts = s.pts ? s.pts.map(pt => [pt[0], pt[1], pt[2], pt[3]]) : null;
       }
     }
     this.pokeActivity();
@@ -764,6 +782,8 @@ class Board {
   _down(e) {
     e.preventDefault();
     this.canvas.setPointerCapture(e.pointerId);
+    // v145：新筆跡開始＝使用者沒在停頓，取消待發的圖形辨識
+    if (this._autoShapeTimer) { clearTimeout(this._autoShapeTimer); this._autoShapeTimer = null; }
     // v101：有動作就喚醒時鐘（5 秒閒置自動暫停後，下筆繼續走）
     this.pokeActivity();
     const rect = this.canvas.getBoundingClientRect();
@@ -840,12 +860,24 @@ class Board {
       const p138 = this._pos(e);
       // 中心把手例外：手指可拖曳移動選取
       if (hasSel && this._centerDragDown(p138)) return;
+      // v147：手指點其他地方＝確定（取消選取）
+      if (hasSel) {
+        this._lassoSel = null;
+        if (typeof window !== 'undefined' && window._mokeUpdateRotateBtns) window._mokeUpdateRotateBtns();
+        this.render();
+      }
       return; // 不畫圖，但保留在 _pointers 供雙指手勢用
     }
     // v20：雙指輕觸＝復原上一步（已由上方雙指邏輯接管，此處保留單指流程）
     const p = this._pos(e);
     // v141：中心把手拖曳（筆/滑鼠/手指都可用）——v138 改壞漏掉這行，補回
     if (hasSel && this._centerDragDown(p)) return;
+    // v147：有選取時在其他地方下筆＝先確定（取消選取，把手立刻消失），同一筆照常畫下一筆（南勛指定的確定方式）
+    if (hasSel && !this.imgAdjust && this.tool !== 'lasso') {
+      this._lassoSel = null;
+      if (typeof window !== 'undefined' && window._mokeUpdateRotateBtns) window._mokeUpdateRotateBtns();
+      this.render();
+    }
     // 規尺本體（移動／旋轉）：交給 app.js 的 overlay 手勢
     if (this.overlayHit && this.overlayHit(p)) { if (this.onOverlayDown) this.onOverlayDown(p); return; }
     if (this.tool === 'laser') { this._laser(p.x, p.y); return; }
@@ -904,7 +936,9 @@ class Board {
       }
     }
     const s = this._newStroke(this.tool);
-    s.pts.push([0, p.fx, p.fy]);
+    const pr0 = this._press(e);  // v145：首點壓感
+    s.pts.push([0, p.fx, p.fy, pr0]);
+    s._pressSm = pr0;  // v145：壓感平滑狀態（暫存，_up 時刪除不存檔）
     s._startPerf = performance.now();
     s._drawn = 0;
     s._renderGen = this._renderGen || 0;
@@ -991,7 +1025,7 @@ class Board {
           s.fx1 = this._r4(o.fx1 + dx); s.fy1 = this._r4(o.fy1 + dy);
         }
         if (o.pts) {
-          s.pts = o.pts.map(pt => [pt[0], this._r4(pt[1] + dx), this._r4(pt[2] + dy)]);
+          s.pts = o.pts.map(pt => [pt[0], this._r4(pt[1] + dx), this._r4(pt[2] + dy), pt[3]]);
         }
       }
       d.moved = true;
@@ -1110,7 +1144,11 @@ class Board {
         const last = this._drawing.pts[this._drawing.pts.length - 1];
         // 過濾過近的點，省空間
         if (Math.hypot((p.fx - last[1]) * this._cssW, (p.fy - last[2]) * this._cssH) < 2) continue;
-        this._drawing.pts.push([Math.round(dt), this._r4(p.fx), this._r4(p.fy)]);
+        // v145：壓感寫入第 4 欄（輕度平滑，防抖動）
+        const rawP = this._press(ce);
+        const sm = this._drawing._pressSm + (rawP - this._drawing._pressSm) * 0.35;
+        this._drawing._pressSm = sm;
+        this._drawing.pts.push([Math.round(dt), this._r4(p.fx), this._r4(p.fy), Math.round(sm * 100) / 100]);
         this._drawing._moved = true;  // v20：雙指復原手勢用
         added = true;
       }
@@ -1191,16 +1229,11 @@ class Board {
           dur: Math.round(performance.now() - d.t)
         });
         this.addStroke(s);
-        // v127：圖形畫完自動選取，可直接按 ⟲⟳ 或雙指旋轉，不用先套索
-        this._lassoSel = [s];
+        // v148：所有圖形畫完都不自動選取（南勛定版：中心拖曳把手要保留，但不要一畫完就跳出來；
+        //       要移動/旋轉時，先用套索主動選取，把手才出現；在其他地方下筆即確定/取消選取）
+        this._lassoSel = null;
         if (typeof window !== 'undefined' && window._mokeUpdateRotateBtns) window._mokeUpdateRotateBtns();
-        // v131：底部提示可旋轉
-        // v134：提示加全——按鈕旋轉、雙指旋轉、中心拖曳一次講清楚
-        // v142：直線/箭頭不提示旋轉
-        const tipMsg = (s.shape === 'line' || s.shape === 'arrow')
-          ? '按住中心可拖曳移動'
-          : '點上面 ⟲⟳ 或雙指可旋轉，按住中心可拖曳';
-        if (typeof window !== 'undefined' && window._mokeToast) window._mokeToast(tipMsg, 3000);
+        this.render();
       }
     }
     else if (this._drawing) {
@@ -1211,8 +1244,15 @@ class Board {
       delete s._renderGen;
       delete s._downT;  // v20：內部計數，不存檔
       delete s._moved;
-      if (s.pts.length === 1) s.pts.push([s.dur, s.pts[0][1], s.pts[0][2]]);
+      delete s._pressSm;  // v145：壓感平滑狀態，不存檔（已寫入各點第 4 欄）
+      if (s.pts.length === 1) s.pts.push([s.dur, s.pts[0][1], s.pts[0][2], s.pts[0][3]]);
       this.addStroke(s);
+      // v145：圖形自動辨識 — 提筆後 600ms 沒新筆跡，判斷是否為圓/直線
+      if (this.autoShape && s.tool === 'pen') {
+        const sid = s.id;
+        if (this._autoShapeTimer) clearTimeout(this._autoShapeTimer);
+        this._autoShapeTimer = setTimeout(() => { this._autoShapeTimer = null; this._tryAutoShape(sid); }, 600);
+      }
     }
     if (hadGesture && this.onDrawEnd) this.onDrawEnd();
     // v104：手抓拖曳結束—有移動就記一筆時間軸事件
@@ -1275,6 +1315,81 @@ class Board {
           window._mokeSyncTime(lastT);
         }
       }
+    }
+  }
+  /* v145：圖形自動辨識 — 提筆後 600ms 沒新筆跡，判斷是否為圓/直線。
+     只認圓和直線；命中→走事件通道換成乾淨圖形（replay 相容），沒命中→原筆跡不動。 */
+  _tryAutoShape(sid) {
+    if (!this.autoShape) return;
+    const s = this.page.strokes.find(x => x.id === sid);
+    if (!s || s.tool !== 'pen' || !s.pts || s.pts.length < 10) return;
+    const W = this._cssW, H = this._cssH;
+    const pts = s.pts.map(pt => [pt[1] * W, pt[2] * H]);
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    for (const q of pts) {
+      if (q[0] < x0) x0 = q[0]; if (q[0] > x1) x1 = q[0];
+      if (q[1] < y0) y0 = q[1]; if (q[1] > y1) y1 = q[1];
+    }
+    const bw = x1 - x0, bh = y1 - y0;
+    if (Math.max(bw, bh) < 28) return;  // 太小不辨識（點、勾都放過）
+    const diag = Math.hypot(bw, bh);
+    const first = pts[0], last = pts[pts.length - 1];
+    const dEnd = Math.hypot(first[0] - last[0], first[1] - last[1]);
+    let hit = null;
+    if (dEnd < diag * 0.4) {
+      // 可能是圓：形心＋半徑變異係數＋長寬比
+      let cx = 0, cy = 0;
+      for (const q of pts) { cx += q[0]; cy += q[1]; }
+      cx /= pts.length; cy /= pts.length;
+      const rs = pts.map(q => Math.hypot(q[0] - cx, q[1] - cy));
+      const mean = rs.reduce((a, b) => a + b, 0) / rs.length;
+      if (mean >= 8) {
+        let va = 0;
+        for (const r of rs) va += (r - mean) * (r - mean);
+        const cv = Math.sqrt(va / rs.length) / mean;
+        const aspect = Math.min(bw, bh) / Math.max(bw, bh);
+        if (cv < 0.25 && aspect > 0.55) {
+          hit = { shape: 'ellipse', fx0: x0 / W, fy0: y0 / H, fx1: x1 / W, fy1: y1 / H };
+        }
+      }
+    }
+    if (!hit) {
+      // 直線：以首尾為軸，最大垂距 < 長度 7% 且長度夠
+      const len = Math.hypot(last[0] - first[0], last[1] - first[1]);
+      if (len > 48) {
+        let maxDev = 0;
+        for (const q of pts) {
+          const dev = Math.abs((last[0] - first[0]) * (first[1] - q[1]) - (first[0] - q[0]) * (last[1] - first[1])) / len;
+          if (dev > maxDev) maxDev = dev;
+        }
+        if (maxDev < len * 0.07) {
+          hit = { shape: 'line', fx0: first[0] / W, fy0: first[1] / H, fx1: last[0] / W, fy1: last[1] / H };
+        }
+      }
+    }
+    if (hit) this._applyAutoShape(s, hit);
+  }
+  /* v145：辨識命中 — 原筆跡走 unadd 事件移除（復原語義），乾淨圖形走 add 事件新增。
+     時間軸上誠實記錄：筆跡曾出現(t1)、被替換(t2)，重播看得到變形過程。 */
+  _applyAutoShape(s, hit) {
+    const pg = this.page;
+    pg.strokes = pg.strokes.filter(x => x.id !== s.id);
+    pg.undo = pg.undo.filter(x => x.id !== s.id);
+    pg.redo = pg.redo.filter(x => x.id !== s.id);
+    this._emit('unadd', { page: this.pageIndex, id: s.id });
+    const ns = this._newStroke('shape', {
+      shape: hit.shape,
+      fx0: this._r4(hit.fx0), fy0: this._r4(hit.fy0),
+      fx1: this._r4(hit.fx1), fy1: this._r4(hit.fy1),
+      dur: 0
+    });
+    this.addStroke(ns);
+    // v148：辨識成圖形也不自動選取（同圖形工具定版行為）
+    this._lassoSel = null;
+    if (typeof window !== 'undefined' && window._mokeUpdateRotateBtns) window._mokeUpdateRotateBtns();
+    this.render();
+    if (typeof window !== 'undefined' && window._mokeToast) {
+      window._mokeToast(hit.shape === 'ellipse' ? '⭕ 已辨識為圓形' : '➖ 已辨識為直線', 1800);
     }
   }
   /* v103：供 _up 暫停時取得最後事件時間（與 TLC.liveEdge 一致） */
@@ -1413,6 +1528,11 @@ class Board {
         ctx.restore();
       }
     }
+    // v146：lockBg 頁（外部轉檔匯入，筆跡座標以整頁底圖為準）— 筆跡改用底圖的 fit 座標系，
+    // 使任何螢幕比例下筆跡都與底圖對齊（一般頁面無此旗標，行為不變）
+    const lockIm = pg.lockBg ? this._migrateImages(pg)[0] : null;
+    const lockB = lockIm ? this._imgBounds(lockIm) : null;
+    if (lockB) { ctx.save(); ctx.translate(lockB.x0, lockB.y0); ctx.scale((lockB.x1 - lockB.x0) / W, (lockB.y1 - lockB.y0) / H); }
     for (const s of pg.strokes) {
       // v47：時間軸回放時只顯示 cutoff 之前的筆跡
       if (this.tlCutoff !== null && this.tlCutoff !== undefined) {
@@ -1421,6 +1541,7 @@ class Board {
       }
       this.drawStroke(ctx, s, 1, W, H);
     }
+    if (lockB) ctx.restore();
     // v96：重播時顯示「曾存在但已被擦除」的筆跡（擦除時間 > cutoff 才顯示）
     if (this.tlCutoff !== null && this.tlCutoff !== undefined && pg.tl && pg.tl.erased) {
       for (const { stroke: s, eraseT } of pg.tl.erased) {
@@ -1591,7 +1712,13 @@ class Board {
     if (!pts.length) { ctx.restore(); return; }
     const total = s.dur || 1;
     const cutoff = progress * total;
-    ctx.strokeStyle = s.color; ctx.lineWidth = s.width * k;
+    ctx.strokeStyle = s.color;
+    if (s.tool === 'pen') {
+      // v145：鋼筆筆壓 — 逐段可變筆寬（螢光筆維持固定寬度）
+      this._drawPressStroke(ctx, s, pts, cutoff, W, H, k);
+      ctx.restore(); return;
+    }
+    ctx.lineWidth = s.width * k;
     ctx.beginPath();
     let started = false, prev = null;
     for (let i = 0; i < pts.length; i++) {
@@ -1620,6 +1747,40 @@ class Board {
       ctx.stroke();
     }
     ctx.restore();
+  }
+
+  /* v145：可變筆寬筆跡繪製（pen 工具專用）— 逐段 stroke，線寬取兩端平均，round cap 銜接；
+     支援 progress（重播/動畫）：畫到 cutoff 時間，末段插值位置與筆寬。 */
+  _drawPressStroke(ctx, s, pts, cutoff, W, H, k) {
+    const wOf = (pt) => this._pressW(s, pt, k);
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    if (pts.length === 1) {
+      ctx.fillStyle = s.color;
+      ctx.beginPath();
+      ctx.arc(pts[0][1] * W, pts[0][2] * H, wOf(pts[0]) / 2, 0, Math.PI * 2);
+      ctx.fill();
+      return;
+    }
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i];
+      const t0 = a[0], t1 = b[0];
+      if (t0 > cutoff) break;
+      let ex = b[1] * W, ey = b[2] * H, ew = wOf(b);
+      let done = false;
+      if (t1 > cutoff) {
+        const r = (cutoff - t0) / Math.max(1, t1 - t0);
+        ex = (a[1] + (b[1] - a[1]) * r) * W;
+        ey = (a[2] + (b[2] - a[2]) * r) * H;
+        ew = wOf(a) + (wOf(b) - wOf(a)) * r;
+        done = true;
+      }
+      ctx.lineWidth = (wOf(a) + ew) / 2;
+      ctx.beginPath();
+      ctx.moveTo(a[1] * W, a[2] * H);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
+      if (done) break;
+    }
   }
 
   _strokeShape(ctx, shape, x0, y0, x1, y1) {
@@ -1696,10 +1857,22 @@ class Board {
     ctx.strokeStyle = s.color; ctx.lineWidth = s.width * k / v.scale;
     if (s.tool === 'highlighter') ctx.globalAlpha = 0.35;
     if (from === 0 && pts.length === 1) {
-      // 單點 → 圓點
+      // 單點 → 圓點（v145：筆工具吃壓感筆寬）
       const x = pts[0][1] * W, y = pts[0][2] * H;
+      const dw = s.tool === 'pen' ? this._pressW(s, pts[0], k / v.scale) : s.width * k / v.scale;
       ctx.fillStyle = s.color;
-      ctx.beginPath(); ctx.arc(x, y, (s.width * k / v.scale) / 2, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x, y, dw / 2, 0, Math.PI * 2); ctx.fill();
+    } else if (s.tool === 'pen') {
+      // v145：筆工具即時繪製 — 逐段可變筆寬（筆壓）
+      const wOf = (pt) => this._pressW(s, pt, k / v.scale);
+      for (let i = Math.max(1, from); i < pts.length; i++) {
+        const a = pts[i - 1], b = pts[i];
+        ctx.lineWidth = (wOf(a) + wOf(b)) / 2;
+        ctx.beginPath();
+        ctx.moveTo(a[1] * W, a[2] * H);
+        ctx.lineTo(b[1] * W, b[2] * H);
+        ctx.stroke();
+      }
     } else {
       ctx.beginPath();
       const p0 = pts[Math.max(0, from - 1)];

@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v144';
+const APP_VERSION = 'v148';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -59,6 +59,7 @@ function fsGuardExit() {
 }
 (function init() {
   const board = new Board($('board'));
+  window._mokeBoard = board;  // v145：測試/除錯鉤子（與 _mokeToast 等同慣例）
 
   /* ----- 來賓模式（電子白板投影端，?room=CODE） ----- */
   const params = new URLSearchParams(location.search);
@@ -519,6 +520,25 @@ function fsGuardExit() {
     toast(board.fingerDraw ? '✋ 手指可以寫字了' : '✋🚫 只有 Apple Pencil 能寫字（防手掌誤觸）');
   };
   updateFingerBtn();
+
+  /* ----- v145：圖形自動辨識開關（預設開，localStorage 記憶） ----- */
+  try { board.autoShape = localStorage.getItem('moke-autoShape') !== '0'; } catch (e) {}
+  const updateAutoshapeBtn = () => {
+    const b = $('btn-autoshape');
+    b.classList.toggle('active', board.autoShape);
+    b.style.opacity = board.autoShape ? '1' : '0.35';
+    b.title = board.autoShape
+      ? '圖形辨識：開（畫圓/直線後停頓 0.6 秒自動變乾淨圖形，點一下關閉）'
+      : '圖形辨識：關（點一下開啟）';
+  };
+  $('btn-autoshape').onclick = () => {
+    board.autoShape = !board.autoShape;
+    if (board._autoShapeTimer) { clearTimeout(board._autoShapeTimer); board._autoShapeTimer = null; }
+    try { localStorage.setItem('moke-autoShape', board.autoShape ? '1' : '0'); } catch (e) {}
+    updateAutoshapeBtn();
+    toast(board.autoShape ? '⭕ 圖形辨識開了' : '⭕ 圖形辨識關了');
+  };
+  updateAutoshapeBtn();
   const updatePageLabel = () => {
     $('page-label').textContent = (board.pageIndex + 1) + ' / ' + board.pageCount();
     // v53：頁數提醒一直顯示，超過 20 頁變紅色
@@ -616,7 +636,7 @@ function fsGuardExit() {
     // v47：每頁獨立時間軸——直接存每頁的筆跡（含 tlT）＋標記，不再存全域事件簿
     const title = ($('lesson-title').value || '未命名課程').trim();
     const pages = board.pages.map(p => ({
-      bg: p.bg, image: p.image || null,
+      bg: p.bg, image: p.image || null, lockBg: !!p.lockBg,
       imgS: p.imgS || 1, imgX: p.imgX || 0, imgY: p.imgY || 0,
       strokes: JSON.parse(JSON.stringify(p.strokes)),
       stops: (p.tl ? p.tl.stops : []).map(m => ({ id: m.id, strokeId: m.strokeId, label: m.label }))
@@ -646,7 +666,7 @@ function fsGuardExit() {
   // 匯出課程檔（JSON 備份，含每頁筆跡＋時間軸＋標記）
   $('btn-export-lesson').onclick = () => {
     const pages = board.pages.map(p => ({
-      bg: p.bg, image: p.image || null,
+      bg: p.bg, image: p.image || null, lockBg: !!p.lockBg,
       imgS: p.imgS || 1, imgX: p.imgX || 0, imgY: p.imgY || 0,
       strokes: p.strokes,
       stops: (p.tl ? p.tl.stops : []).map(m => ({ id: m.id, strokeId: m.strokeId, label: m.label }))
@@ -765,6 +785,7 @@ function fsGuardExit() {
         imgS: p.imgS || 1, imgX: p.imgX || 0, imgY: p.imgY || 0,
         // v139：多圖 — 讀 images 陣列，沒有就從舊格式遷移
         images: (p.images || []).map(im => ({ id: im.id, src: im.src, x: im.x || 0, y: im.y || 0, s: im.s || 1, _el: null })),
+        lockBg: !!p.lockBg,
         strokes: JSON.parse(JSON.stringify(p.strokes || [])),
         undo: [], redo: [],
         tl: { events: [], stops: (p.stops || []).map(m => ({ id: m.id, strokeId: m.strokeId, label: m.label })), clock: null, unadded: [] }
@@ -774,6 +795,7 @@ function fsGuardExit() {
       board.pages = (l.basePages || []).map(p => ({
         bg: p.bg, image: p.image, imgS: p.imgS || 1, imgX: p.imgX || 0, imgY: p.imgY || 0, strokes: JSON.parse(JSON.stringify(p.strokes || [])),
         images: (p.images || []).map(im => ({ id: im.id, src: im.src, x: im.x || 0, y: im.y || 0, s: im.s || 1, _el: null })),
+        lockBg: !!p.lockBg,
         undo: [], redo: [], tl: { events: [], stops: [], clock: null, unadded: [] }
       }));
     }

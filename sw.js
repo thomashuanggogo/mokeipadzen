@@ -1,5 +1,5 @@
 /* 墨課 · Service Worker（離線可用） */
-const CACHE = 'moke-v144';
+const CACHE = 'moke-v148';
 const ASSETS = [
   './',
   'index.html',
