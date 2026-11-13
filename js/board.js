@@ -693,6 +693,33 @@ class Board {
     return { x0, y0, x1, y1 };
   }
   /* v133：中心移動把手的螢幕座標（供點擊判斷），無選取回傳 null */
+  /* v149：選取框角落旋轉把手的螢幕座標（與 render 繪製位置一致） */
+  _rotateHandlesScreen() {
+    const bb = this._lassoBBox();
+    if (!bb) return null;
+    const v = this.view;
+    const x0 = bb.x0 * v.scale + v.ox, y0 = bb.y0 * v.scale + v.oy;
+    const x1 = bb.x1 * v.scale + v.ox, y1 = bb.y1 * v.scale + v.oy;
+    return [{ x: x1 + 8, y: y0 - 8 }, { x: x0 - 8, y: y1 + 8 }];
+  }
+  /* v149：按住角落旋轉把手拖曳＝旋轉選取（先前把手只是裝飾、拖了沒反應，南勛：根本沒辦法用）
+     p.x/p.y 為螢幕座標；命中任一把手（放寬到 28）就開始旋轉拖曳 */
+  _rotateDragDown(p) {
+    if (!this._lassoSel || !this._lassoSel.length) return false;
+    // v142 沿用：單選直線/箭頭不旋轉
+    if (this._lassoSel.length === 1 && (this._lassoSel[0].shape === 'line' || this._lassoSel[0].shape === 'arrow')) return false;
+    const hs = this._rotateHandlesScreen();
+    const c = this._centerHandleScreen();
+    if (!hs || !c) return false;
+    for (const h of hs) {
+      if (Math.hypot(p.x - h.x, p.y - h.y) <= 28) {
+        this._rotateDrag = { cx: c.x, cy: c.y, a0: Math.atan2(p.y - c.y, p.x - c.x), moved: false };
+        this.pokeActivity();
+        return true;
+      }
+    }
+    return false;
+  }
   _centerHandleScreen() {
     const bb = this._lassoBBox();
     if (!bb) return null;
@@ -860,6 +887,8 @@ class Board {
       const p138 = this._pos(e);
       // 中心把手例外：手指可拖曳移動選取
       if (hasSel && this._centerDragDown(p138)) return;
+      // v149：角落旋轉把手例外：手指可拖曳旋轉選取
+      if (hasSel && this._rotateDragDown(p138)) return;
       // v147：手指點其他地方＝確定（取消選取）
       if (hasSel) {
         this._lassoSel = null;
@@ -872,6 +901,8 @@ class Board {
     const p = this._pos(e);
     // v141：中心把手拖曳（筆/滑鼠/手指都可用）——v138 改壞漏掉這行，補回
     if (hasSel && this._centerDragDown(p)) return;
+    // v149：角落旋轉把手拖曳（筆/滑鼠/手指都可用）
+    if (hasSel && this._rotateDragDown(p)) return;
     // v147：有選取時在其他地方下筆＝先確定（取消選取，把手立刻消失），同一筆照常畫下一筆（南勛指定的確定方式）
     if (hasSel && !this.imgAdjust && this.tool !== 'lasso') {
       this._lassoSel = null;
@@ -1009,6 +1040,21 @@ class Board {
         this._lassoPath.push({ x: p2.cx, y: p2.cy });
         this._lastActivity = performance.now();
         this.render();
+      }
+      return;
+    }
+    // v149：角落把手旋轉拖曳中（增量旋轉，silent；_up 統一發事件）
+    if (this._rotateDrag) {
+      const p2 = this._pos(e);
+      const d = this._rotateDrag;
+      const a = Math.atan2(p2.y - d.cy, p2.x - d.cx);
+      let da = (a - d.a0) * 180 / Math.PI;
+      if (da > 180) da -= 360;
+      if (da < -180) da += 360;
+      if (Math.abs(da) > 1) {
+        this.rotateSelection(da, true);
+        d.a0 = a;
+        d.moved = true;
       }
       return;
     }
@@ -1171,6 +1217,17 @@ class Board {
     if (this._imgDrag) this._imgDrag = null;
     // v143：裁切拖曳結束
     if (this._cropDrag) this._cropDrag = null;
+    // v149：角落把手旋轉結束—統一發一次時間軸事件（比照雙指旋轉）
+    if (this._rotateDrag) {
+      const rd = this._rotateDrag; this._rotateDrag = null;
+      if (rd.moved && this._lassoSel && this._lassoSel.length) {
+        for (const s of this._lassoSel) {
+          this._emit('move', { page: this.pageIndex, id: s.id, rotate: 'gesture' });
+        }
+        this.pokeActivity();
+      }
+      this.render();
+    }
     if (this._pinch) {
       if (this._pointers.size < 2) {
         // 雙指輕觸（未移動、350ms 內）＝復原（v20 行為）
