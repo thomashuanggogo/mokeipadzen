@@ -661,6 +661,47 @@ class Board {
     }
   }
   /* v105：套索圈選—任一關鍵點在多邊形內就選中 */
+  /* v150：套索點選 — 點一下選中單一筆跡/圖形（南勛要求：不用畫圈）。
+     命中規則（canvas 座標）：文字＝距錨點 32px；手寫筆跡＝距線段 16px；
+     直線/箭頭＝距線身 16px；其他圖形＝點在範圍內或距邊線 16px。
+     多個命中時取最後畫的那個（視覺上最上面）。沒命中回傳 null（＝取消選取）。 */
+  _tapSelect(cx, cy) {
+    const W = this._cssW, H = this._cssH;
+    const segDist = (px, py, ax, ay, bx, by) => {
+      const dx = bx - ax, dy = by - ay;
+      const L2 = dx * dx + dy * dy;
+      let t = L2 ? ((px - ax) * dx + (py - ay) * dy) / L2 : 0;
+      t = Math.max(0, Math.min(1, t));
+      return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+    };
+    let best = null;
+    for (const s of this.page.strokes) {
+      let hit = false;
+      if (s.tool === 'text') {
+        hit = Math.hypot(cx - s.fx * W, cy - s.fy * H) <= 32;
+      } else if (s.tool === 'shape' && (s.shape === 'line' || s.shape === 'arrow')) {
+        hit = segDist(cx, cy, s.fx0 * W, s.fy0 * H, s.fx1 * W, s.fy1 * H) <= 16;
+      } else if (s.tool === 'shape') {
+        const c = this._strokePointsPx(s, W, H);  // 旋轉後四角，順序 (x0,y0)(x1,y0)(x0,y1)(x1,y1)
+        const quad = [c[0], c[1], c[3], c[2]].map(([x, y]) => ({ x, y }));
+        if (this._pointInPoly(cx, cy, quad)) hit = true;
+        for (let i = 0; i < 4 && !hit; i++) {
+          const a = quad[i], b = quad[(i + 1) % 4];
+          hit = segDist(cx, cy, a.x, a.y, b.x, b.y) <= 16;
+        }
+      } else if (s.pts && s.pts.length) {
+        const pts = s.pts;
+        if (pts.length === 1) {
+          hit = Math.hypot(cx - pts[0][1] * W, cy - pts[0][2] * H) <= 16;
+        }
+        for (let i = 1; i < pts.length && !hit; i++) {
+          hit = segDist(cx, cy, pts[i - 1][1] * W, pts[i - 1][2] * H, pts[i][1] * W, pts[i][2] * H) <= 16;
+        }
+      }
+      if (hit) best = s;
+    }
+    return best ? [best] : null;
+  }
   _selectInLasso(poly) {
     const W = this._cssW, H = this._cssH;
     const sel = [];
@@ -1330,15 +1371,20 @@ class Board {
       if (path.length > 8) {
         this._lassoSel = this._selectInLasso(path);
       } else {
-        this._lassoSel = null;  // 太短，當作點一下→取消選取
+        // v150：短路徑＝點一下 — 先試點選單一筆跡/圖形，沒點中才取消選取
+        const tx = path.reduce((a, p) => a + p.x, 0) / path.length;
+        const ty = path.reduce((a, p) => a + p.y, 0) / path.length;
+        this._lassoSel = this._tapSelect(tx, ty);
       }
       if (typeof window !== 'undefined' && window._mokeUpdateRotateBtns) window._mokeUpdateRotateBtns();
-      // v135：選到東西就提示操作方式
+      // v135：選到東西就提示操作方式（v150：把三個把手與確定方式一次講清楚）
       // v142：單選直線/箭頭不提示旋轉
       if (this._lassoSel && this._lassoSel.length && typeof window !== 'undefined' && window._mokeToast) {
         const sel = this._lassoSel;
         const isLine = sel.length === 1 && (sel[0].shape === 'line' || sel[0].shape === 'arrow');
-        window._mokeToast(isLine ? '已選取：按住中心可拖曳' : '已選取：點上面 ⟲⟳ 或雙指可旋轉，按住中心可拖曳', 3000);
+        window._mokeToast(isLine
+          ? '已選取：按住中心把手拖曳移動；在其他地方下筆＝確定'
+          : '已選取：中心把手拖曳移動、角落圓箭頭拖曳旋轉；在其他地方下筆＝確定', 3600);
       }
       this.render();
     }
