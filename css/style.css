@@ -21,7 +21,7 @@ button.primary:active { background: #1864ab; }
 /* 頂部列 */
 #topbar {
   display: flex; align-items: center; gap: 10px;
-  padding: 6px 10px; padding-top: max(6px, env(safe-area-inset-top)); /* v112: 壓緊 */
+  padding: 4px 10px; padding-top: max(4px, env(safe-area-inset-top)); /* v112: 壓緊；v157 再縮 */
   background: #212529; color: #fff;
   flex: 0 0 auto; /* v30: 永不被壓縮 */
   overflow-x: auto; /* v82: 按鈕太多時可橫滑，不會被切掉 */
@@ -36,6 +36,7 @@ body.img-adjusting #topbar { background: #8a4b00; }
 #rec-controls { display: flex; align-items: center; gap: 6px; flex: 1; } /* v84: iPad 優先，間距縮小 */
 .rec-btn { background: #343a40; color: #fff; border-color: #495057; }
 .top-actions { display: flex; gap: 8px; }
+#topbar button { padding: 3px 7px; font-size: 13px; } /* v157：頂部列按鈕縮小；v158 壓扁版再壓 */
 .top-actions button { background: #343a40; color: #fff; border-color: #495057; white-space: nowrap; } /* v87: 橫排不換行 */
 
 /* 主區 */
@@ -180,7 +181,8 @@ body.img-adjusting #topbar { background: #8a4b00; }
 }
 #toolbar .tool-group { display: flex; flex-direction: row; gap: 4px; align-items: center; } /* v112: gap 6→4 */
 .tool-group.row { flex-direction: row; }
-.tool { font-size: 18px; width: 44px; height: 44px; padding: 0; }
+.tool { font-size: 15px; width: 32px; height: 32px; padding: 0; background: transparent; border-color: transparent; } /* v157：圖標縮小；v158 壓扁版：無框 glyph（GoodNotes 風） */
+#toolbar button { padding: 3px 8px; font-size: 13.5px; } /* v158 壓扁版：工具列一般按鈕跟著壓 */
 .tool.active { background: #d0ebff; border-color: #1971c2; }
 .color { width: 30px; height: 30px; border-radius: 50%; padding: 0; border: 2px solid #adb5bd; }
 .color.active { border-color: #212529; transform: scale(1.15); }
@@ -296,7 +298,7 @@ body.guest-mode #rec-controls { visibility: hidden; }
 
 /* 直式小螢幕微調 */
 @media (max-width: 640px) {
-  .tool { width: 40px; height: 40px; font-size: 16px; }
+  .tool { width: 34px; height: 34px; font-size: 15px; }
   .brand { font-size: 15px; }
   button { font-size: 13px; padding: 7px 9px; }
   #toolbar { gap: 6px; padding: 6px 8px; }
