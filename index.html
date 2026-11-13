@@ -72,8 +72,7 @@
 <!-- v21：浮動可拖拉工具列（預設頂部置中） -->
     <aside id="toolbar">
       <div class="tool-group" id="tools">
-        <button data-tool="hand" class="tool" title="手抓（拖曳移動文字）">✋</button>
-        <button data-tool="lasso" class="tool" title="套索（選取）：點一下圖形/筆跡選一個、畫圈選多個；選中後中心把手拖曳移動、角落圓箭頭拖曳旋轉">🪢</button>
+        <button data-tool="hand" class="tool" title="手抓：點住文字、圖形、筆跡都能直接拖曳移動（不用先選取）">✋</button>
         <!-- v120：顏色按鈕搬到套索旁邊（原本在工具列尾端，iPad 橫滑不好找） -->
         <div id="color-group">
           <button id="btn-color" class="tool" title="顏色 / 粗細"><span id="color-dot"></span></button>
@@ -88,6 +87,7 @@
         <button data-tool="pen" class="tool active" title="畫筆">✏️</button>
         <button data-tool="highlighter" class="tool" title="螢光筆">🖍️</button>
         <button data-tool="eraser" class="tool" title="橡皮擦">🧽</button>
+        <button data-tool="lasso" class="tool" title="套索（選取）：點一下圖形/筆跡選一個、畫圈選多個；選中後中心把手拖曳移動、角落圓箭頭拖曳旋轉">🪢</button>
         <button data-tool="line" class="tool" title="直線">➖</button>
         <button data-tool="arrow" class="tool" title="箭頭">➡️</button>
         <button data-tool="rect" class="tool" title="矩形">⬜</button>
@@ -231,12 +231,12 @@
       <p><b>🧘 禪模式</b>：工具列變左側直條，右手寫字、左手切工具；再按恢復。</p>
       <p><b>⛶ 全螢幕</b>：隱藏 Safari 網址列，畫布變大；再按一次退出。</p>
       <p><b>── 工具列 ──</b></p>
-      <p><b>✋ 手抓</b>：拖曳移動文字。<b>🪢 套索（選取）</b>：點一下圖形或筆跡＝選中一個；畫圈＝選中多個。選中後<b>按住中心把手拖曳＝移動</b>、<b>按住角落圓箭頭拖曳＝旋轉</b>（或按上方 ⟲⟳ 一次 15°、或雙指旋轉）；<b>在其他地方下筆＝確定</b>（選取消失）。</p>
+      <p><b>✋ 手抓</b>：點住文字、圖形、筆跡都能直接拖曳移動，不用先選取（最快的搬法）。<b>🪢 套索（選取）</b>：點一下圖形或筆跡＝選中一個；畫圈＝選中多個。選中後<b>按住中心把手拖曳＝移動</b>、<b>按住角落圓箭頭拖曳＝旋轉</b>（或按上方 ⟲⟳ 一次 15°、或雙指旋轉）；<b>在其他地方下筆＝確定</b>（選取消失）。</p>
       <p><b>🎨 顏色</b>（套索旁）：16 色＋自訂色（彩虹格可調任意顏色）＋粗細滑桿，點一下就換。</p>
       <p><b>✏️ 畫筆／🖍️ 螢光筆／🧽 橡皮擦</b>：橡皮擦是時間軸事件，重播看得到擦除過程。</p>
       <p><b>➖ ➡️ ⬜ ◺ ▱ ⭕</b>：直線／箭頭／矩形／直角三角形／平行四邊形／橢圓，拖曳畫出。<b>畫完不會自動選取</b>；要移動或旋轉，先用 🪢 套索點一下（或圈選）它，再拖曳中心把手移動、角落圓箭頭旋轉。直線和箭頭只能移動，不能旋轉。</p>
       <p><b>📊 座標軸</b>：一筆畫出 x-y 軸。<b>🔤 文字</b>：點畫布打字。</p>
-      <p><b>🔴 雷射筆</b>：上課指示用，不會被記錄。</p>
+      <p><b>🔴 雷射筆</b>：上課指示用，不會被記錄。按住拖曳會留下細紅軌跡，按住不放軌跡都在，放開後自動淡出消失。</p>
       <p><b>📏 直尺／📐 量角器／🧭 圓規</b>：幾何作圖工具。</p>
       <p><b>↩️ ↪️</b>：復原／重做；雙指輕觸畫布＝復原。</p>
       <p><b>── 時間軸抽屜 ──</b></p>

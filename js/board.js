@@ -26,8 +26,10 @@ class Board {
     this._lastActivity = 0;       // v101：最後動作時間（performance.now），5 秒閒置自動暫停時鐘
     this._drawing = null;         // 進行中的筆跡
     this._shapeDrag = null;       // 進行中的圖形
-    this._laserTrail = [];        // 雷射筆暫存 [{x,y,at}]
+    this._laserTrail = [];        // 雷射筆軌跡點 [{x,y}]
     this._laserTicking = false;
+    this._laserHeld = false;      // v154：按住中（軌跡保留）
+    this._laserFadeStart = 0;     // v154：放開時間（整條淡出用）
     this._cssW = 0; this._cssH = 0;
     // v42：雙指縮放視圖 {scale, ox, oy}（scale=縮放倍率，ox/oy=CSS px 偏移）
     this.view = { scale: 1, ox: 0, oy: 0 };
@@ -566,7 +568,27 @@ class Board {
         return;
       }
     }
-    // 沒點中文字：不做事（畫布平移用雙指）
+    // v155：手抓升級（南勛核准）— 沒點中文字時，改抓圖形/筆跡：
+    // 與套索點選同一命中規則，按住直接拖曳（借套索拖曳機制，含時間軸 move 事件）；
+    // 只點一下不拖＝順便選取（框會留著，可接著用角落把手旋轉）
+    const hit = this._tapSelect(p.cx, p.cy);
+    if (hit && hit.length) {
+      const s = hit[0];
+      this._lassoSel = [s];
+      if (typeof window !== 'undefined' && window._mokeUpdateRotateBtns) window._mokeUpdateRotateBtns();
+      if (s._origFx === undefined) {
+        s._origFx = s.fx; s._origFy = s.fy; s._origRot = s.rot || 0;
+        s._origFx0 = s.fx0; s._origFy0 = s.fy0;
+        s._origFx1 = s.fx1; s._origFy1 = s.fy1;
+        s._origPts = s.pts ? s.pts.map(pt => [pt[0], pt[1], pt[2], pt[3]]) : null;
+      }
+      this._lassoDrag = { x0: p.cx, y0: p.cy, moved: false,
+        orig: [{ s, fx: s.fx, fy: s.fy, fx0: s.fx0, fy0: s.fy0, fx1: s.fx1, fy1: s.fy1,
+                 pts: s.pts ? s.pts.map(pt => [pt[0], pt[1], pt[2], pt[3]]) : null }] };
+      this.pokeActivity();
+      this.render();
+    }
+    // 都沒點中：不做事（畫布平移用雙指）
   }
   /* v105：套索工具 */
   _lassoDown(p) {
@@ -1252,6 +1274,8 @@ class Board {
     }
   }
   _up(e) {
+    // v154：雷射放開 → 整條軌跡開始淡出
+    if (this.tool === 'laser') this._laserUp();
     // v42：雙指手勢結束
     this._pointers.delete(e.pointerId);
     // v73：底圖拖曳結束
@@ -1511,26 +1535,55 @@ class Board {
     return m;
   }
 
+  /* v154：雷射改 GoodNotes 式（南勛指定）— 按住不放時整條軌跡保留不消失；
+     軌跡是 3.5px 細平滑紅線＋筆頭亮點（舊版是 18px 粗圓點串、0.5 秒就消）；
+     放開後整條在 0.6 秒內淡出。雷射不進時間軸、不被記錄（同舊版）。 */
   _laser(x, y) {
-    this._laserTrail.push({ x, y, at: performance.now() });
+    if (!this._laserHeld) { this._laserTrail = []; this._laserFadeStart = 0; }
+    this._laserHeld = true;
+    const last = this._laserTrail[this._laserTrail.length - 1];
+    if (!last || Math.hypot(x - last.x, y - last.y) > 2) this._laserTrail.push({ x, y });
     if (!this._laserTicking) { this._laserTicking = true; requestAnimationFrame(() => this._laserFrame()); }
   }
+  _laserUp() {
+    if (this._laserHeld) { this._laserHeld = false; this._laserFadeStart = performance.now(); }
+  }
   _laserFrame() {
+    if (this.tool !== 'laser' && this._laserHeld) this._laserUp();  // 中途換工具也開始淡出
     const now = performance.now();
-    this._laserTrail = this._laserTrail.filter(p => now - p.at < 500);
+    let alpha = 1;
+    if (!this._laserHeld && this._laserFadeStart) {
+      alpha = 1 - (now - this._laserFadeStart) / 600;
+      if (alpha <= 0) {
+        this._laserTrail = []; this._laserFadeStart = 0; this._laserTicking = false;
+        this.render();
+        return;
+      }
+    }
     this.render();
-    const ctx = this.ctx;
-    for (const p of this._laserTrail) {
-      const a = 1 - (now - p.at) / 500;
+    const pts = this._laserTrail;
+    if (pts.length) {
+      const ctx = this.ctx;
       ctx.save();
-      ctx.globalAlpha = a;
+      ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+      ctx.strokeStyle = '#ff2d2d';
       ctx.fillStyle = '#ff2d2d';
-      ctx.shadowColor = '#ff2d2d'; ctx.shadowBlur = 12;
-      ctx.beginPath(); ctx.arc(p.x, p.y, 9, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowColor = '#ff2d2d'; ctx.shadowBlur = 6;
+      ctx.lineWidth = 3.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      if (pts.length === 2) ctx.lineTo(pts[1].x, pts[1].y);
+      for (let i = 1; i < pts.length - 1; i++) {
+        const mx = (pts[i].x + pts[i + 1].x) / 2, my = (pts[i].y + pts[i + 1].y) / 2;
+        ctx.quadraticCurveTo(pts[i].x, pts[i].y, mx, my);
+      }
+      if (pts.length > 2) ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+      ctx.stroke();
+      const head = pts[pts.length - 1];
+      ctx.beginPath(); ctx.arc(head.x, head.y, 4, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
     }
-    if (this._laserTrail.length) requestAnimationFrame(() => this._laserFrame());
-    else { this._laserTicking = false; this.render(); }
+    requestAnimationFrame(() => this._laserFrame());
   }
 
   /* ---------- 繪製 ---------- */
