@@ -330,7 +330,8 @@ body.guest-mode #rec-controls { visibility: hidden; }
   box-shadow: 0 4px 16px rgba(0,0,0,.18); padding: 12px;
   display: flex; flex-direction: column; gap: 10px;
 }
-#color-pop #colors { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+#color-pop #colors { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; }
+#color-pop .color.custom { display: inline-block; box-sizing: border-box; cursor: pointer; background: conic-gradient(#e03131, #f08c00, #fab005, #2f9e44, #1971c2, #9c36b5, #e03131); }
 #color-pop .pop-row { display: flex; align-items: center; gap: 8px; }
 #color-pop .pop-row .lbl { display: inline; }
 #color-pop #width-range { width: 130px; }

@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v150';
+const APP_VERSION = 'v151';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -69,7 +69,9 @@ function fsGuardExit() {
   /* v47：每頁獨立時間軸——時鐘在每頁第一筆筆跡時才啟動，無需全域 begin */
 
   /* ----- 工具列 ----- */
-  const COLORS = ['#111111', '#ffffff', '#e03131', '#1971c2', '#2f9e44', '#f08c00', '#9c36b5', '#0c8599'];
+  // v151：8 色 → 16 色（老師配色實務：主色/重點/補充/標記都夠用），另有自訂色
+  const COLORS = ['#111111', '#ffffff', '#e03131', '#1971c2', '#2f9e44', '#f08c00', '#9c36b5', '#0c8599',
+                  '#868e96', '#f783ac', '#74c0fc', '#087f5b', '#8d6e63', '#fab005', '#9775fa', '#3bc9db'];
   const colorBox = $('colors');
   const colorPop = $('color-pop');
   const colorDot = $('color-dot');
@@ -87,6 +89,23 @@ function fsGuardExit() {
     };
     colorBox.appendChild(b);
   });
+  // v151：自訂色（色票盤最後一格彩虹格，點開系統選色器，任意顏色）
+  const customLabel = document.createElement('label');
+  customLabel.className = 'color custom';
+  customLabel.title = '自訂顏色';
+  const customInput = document.createElement('input');
+  customInput.type = 'color';
+  customInput.value = '#e03131';
+  customInput.style.display = 'none';
+  customInput.addEventListener('input', () => {
+    board.setColor(customInput.value);
+    colorBox.querySelectorAll('.color').forEach(x => x.classList.remove('active'));
+    customLabel.classList.add('active');
+    colorDot.style.background = customInput.value;
+  });
+  customInput.addEventListener('change', () => colorPop.classList.add('hidden'));
+  customLabel.appendChild(customInput);
+  colorBox.appendChild(customLabel);
   // v112：顏色/粗細 popover 開關（點外面自動關）
   // v124：popover 改 position:fixed（iPad 工具列 overflow-x:auto 會裁掉 absolute 層），用 JS 算位置
   $('btn-color').onclick = (e) => {
@@ -97,7 +116,7 @@ function fsGuardExit() {
         colorPop.style.left = (r.right + 6) + 'px';
         colorPop.style.top = Math.max(8, r.top) + 'px';
       } else {
-        colorPop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 200)) + 'px';
+        colorPop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 340)) + 'px';
         colorPop.style.top = (r.bottom + 6) + 'px';
       }
       colorPop.classList.remove('hidden');
