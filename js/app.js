@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v160';
+const APP_VERSION = 'v161';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
