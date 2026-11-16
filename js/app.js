@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v167';
+const APP_VERSION = 'v168';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -1204,7 +1204,7 @@ function fsGuardExit() {
     renderTlStrip();
     bindTimelineKeys();
     if (!wasActive) {
-      toast('🕘 時間軸：邊寫邊用；⏮ 回到上一段，⏭ 逐段重播', 2500);
+      toast('🕘 時間軸：邊寫邊用；◀◀ 回到上一段，▶▶ 直接跳下一段', 2500);
       if (Share.mode === 'host') toast('📡 分享中：電子白板不會同步時間軸操作，請改用螢幕鏡像投影', 3000);
     }
   }
@@ -1229,7 +1229,7 @@ function fsGuardExit() {
     unbindTimelineKeys();
     tlKeyHandler = (e) => {
       if (!TLC.active) return;
-      if (e.key === 'PageDown' || e.key === 'ArrowRight') { e.preventDefault(); TLC.nextStop(); }
+      if (e.key === 'PageDown' || e.key === 'ArrowRight') { e.preventDefault(); TLC.revealNext(); }  // v168：簡報筆同 ▶▶，直接跳
       else if (e.key === 'PageUp' || e.key === 'ArrowLeft') { e.preventDefault(); TLC.prevStop(); }
       else if (e.key === ' ') { e.preventDefault(); TLC.playing ? TLC.pause() : (TLC.play() || toast('已在即時進度')); }
       else if (e.key === 'Escape') { closeTimeline(); }
@@ -1277,23 +1277,11 @@ function fsGuardExit() {
     if (r === 'live') toast('已在即時進度');
     else if (r === 'tolive') toast('▶ 回到即時');
   };
-  /* ⏭ 單擊：動畫播放；雙擊：瞬間呈現 */
-  let tlNextTimer = null;
+  /* ▶▶ 下一個標記：直接跳過去（v168：南勛要求——原本單擊是「播放到段落點」、雙擊才瞬間跳，改成單擊直接跳，不再等雙擊） */
   $('btn-tl-next').onclick = () => {
     if (!ensureTLC()) return;
-    clearTimeout(tlNextTimer);
-    tlNextTimer = setTimeout(() => {
-      const m = TLC.nextStop();
-      if (m === 'live') toast('已在即時進度');
-      else if (m === 'tolive') toast('▶ 回到即時');
-      else if (m) toast('⏭ 播放到：' + (m.label || '段落'));
-    }, 280);
-  };
-  $('btn-tl-next').ondblclick = () => {
-    if (!TLC.active) return;
-    clearTimeout(tlNextTimer);
     const m = TLC.revealNext();
-    toast(m ? '⚡ 瞬間呈現：' + (m.label || '段落') : '已在即時進度');
+    toast(m ? '⏭ 已跳到：' + (m.label || '段落') : '已在即時進度');
   };
   $('tl-seek').onpointerdown = () => { tlSeekDrag = true; };
   // v30：seek 值是該頁相對時間，轉回 session 時間再 goTo
