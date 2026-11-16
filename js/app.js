@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v175';
+const APP_VERSION = 'v176';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -1324,9 +1324,13 @@ function fsGuardExit() {
     board._tlPlayhead = board._tlInsertNext;
   };
   board.onDrawEnd = () => {
+    // v176：補線後把播放頭推到新筆末端——游標接續的筆 tlT 會超過原本的 cutoff，
+    // 不推播放頭就會被算繪濾掉（學長實測：畫完當場消失，以為沒對上時間軸）
+    const insertedTo = (board._tlPlayhead !== null && board._tlPlayhead !== undefined) ? board._tlInsertNext : null;
     board._tlPlayhead = null;
     // 回放中新增筆跡後，更新時間軸 UI
     if (TLC.active) {
+      if (insertedTo !== null && insertedTo > TLC.playhead) TLC.goTo(insertedTo);
       renderTlTicks(tlDuration());
       TLC._ui();
     }
