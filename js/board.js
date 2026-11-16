@@ -520,6 +520,15 @@ class Board {
     const cx = (sx - v.ox) / v.scale, cy = (sy - v.oy) / v.scale;
     return { x: sx, y: sy, cx, cy, fx: cx / this._cssW, fy: cy / this._cssH };
   }
+  /* v162：手指書寫補正——系統回報的觸點是指腹中心，比使用者瞄準的指尖上緣低約 10px，
+     用手指寫字時墨會出現在瞄準點下方（感覺沒對準）。pen/mouse 不補正；
+     只套用在筆/螢光筆/橡皮擦的落點，選取/拖曳/圖形不動，避免點按錯位 */
+  _lift(e, p) {
+    if (!e || e.pointerType !== 'touch' || !p) return p;
+    const sc = (this.view && this.view.scale) || 1;
+    const cy = p.cy - 10 / sc;
+    return Object.assign({}, p, { cy, fy: cy / this._cssH });
+  }
   /* 形狀拖曳開始：快照畫布，拖曳中只還原快照＋畫預覽，不重繪整頁（v19） */
   _beginShapeDrag(d) {
     this._shapeDrag = d;
@@ -1001,7 +1010,7 @@ class Board {
     if (this.tool === 'hand') { this._handDown(p); return; }
     // v105：套索工具—框選或拖曳已選筆跡
     if (this.tool === 'lasso') { this._lassoDown(p); return; }
-    if (this.tool === 'eraser') { this.eraseAt(p.fx, p.fy); this._erasing = true; return; }
+    if (this.tool === 'eraser') { const lp = this._lift(e, p); this.eraseAt(lp.fx, lp.fy); this._erasing = true; return; }
     if (this.tool === 'text') { if (this.onTextTap) this.onTextTap(p.fx, p.fy); return; }
     if (['line', 'arrow', 'rect', 'ellipse', 'rtriangle', 'parallelogram', 'axes'].includes(this.tool)) {
       this._beginShapeDrag({ shape: this.tool, fx0: p.fx, fy0: p.fy, fx1: p.fx, fy1: p.fy, t: performance.now() });
@@ -1031,7 +1040,8 @@ class Board {
     }
     const s = this._newStroke(this.tool);
     const pr0 = this._press(e);  // v145：首點壓感
-    s.pts.push([0, p.fx, p.fy, pr0]);
+    const lp0 = this._lift(e, p);  // v162：手指補正
+    s.pts.push([0, lp0.fx, lp0.fy, pr0]);
     s._pressSm = pr0;  // v145：壓感平滑狀態（暫存，_up 時刪除不存檔）
     s._startPerf = performance.now();
     s._drawn = 0;
@@ -1209,7 +1219,7 @@ class Board {
     }
     const p = this._pos(e);
     if (this.tool === 'laser' && e.buttons) { this._laser(p.x, p.y); return; }
-    if (this._erasing) { this.eraseAt(p.fx, p.fy); return; }
+    if (this._erasing) { const lp = this._lift(e, p); this.eraseAt(lp.fx, lp.fy); return; }
     if (this._shapeDrag) {
       const d = this._shapeDrag;
       if (d._compass) {
@@ -1248,7 +1258,7 @@ class Board {
       const evts = (e.getCoalescedEvents ? e.getCoalescedEvents() : [e]);
       let added = false;
       for (const ce of evts) {
-        const p = this._pos(ce, rect);
+        const p = this._lift(ce, this._pos(ce, rect));  // v162：手指補正
         const dt = performance.now() - this._drawing._startPerf;
         const last = this._drawing.pts[this._drawing.pts.length - 1];
         // 過濾過近的點，省空間
