@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v169';
+const APP_VERSION = 'v170';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -693,6 +693,14 @@ function fsGuardExit() {
     m.addEventListener('click', e => { if (e.target === m) m.classList.add('hidden'); });
   });
   const openModal = id => $(id).classList.remove('hidden');
+
+  /* v170：第一次打開自動跳使用說明（新使用者不知道要點左上 logo）；看過就記住，之後不再自動跳 */
+  try {
+    if (!localStorage.getItem('moke-helpSeen')) {
+      localStorage.setItem('moke-helpSeen', '1');
+      openModal('modal-help');
+    }
+  } catch (e) {}
 
   /* ----- 課程管理 ----- */
   $('btn-lessons').onclick = () => { refreshLessonList(); openModal('modal-lessons'); };
@@ -1628,6 +1636,10 @@ function fsGuardExit() {
       }
     };
   }
+  // v170：說明與更新做成看得見的按鈕（原本分別藏在 logo 與版本號的點擊裡，新使用者找不到）
+  const helpBtn = $('btn-help'); if (helpBtn) helpBtn.onclick = () => openModal('modal-help');
+  const updBtn = $('btn-update'); if (updBtn && verEl) updBtn.onclick = () => verEl.click();
+
   updatePageLabel();
   board.render();
 })();
