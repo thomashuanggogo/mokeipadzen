@@ -331,6 +331,19 @@ body.guest-mode #rec-controls { visibility: hidden; }
   display: flex; flex-direction: column; gap: 10px;
 }
 #color-pop #colors { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; }
+/* v163：手指落點補正量 popover（比照 #color-pop 的 fixed 定位，避免被工具列裁掉） */
+#lift-pop {
+  position: fixed; z-index: 1000; width: 248px;
+  background: #fff; border: 1px solid #dee2e6; border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.18); padding: 12px;
+  display: flex; flex-direction: column; gap: 8px; color: #212529;
+}
+#lift-pop .pop-row { display: flex; align-items: center; gap: 8px; }
+#lift-pop .lbl { font-size: 14px; font-weight: 600; }
+#lift-pop #lift-val, #lift-pop #liftx-val { margin-left: auto; font-variant-numeric: tabular-nums; font-size: 14px; color: #1971c2; }
+#lift-pop #liftx-range { flex: 1; }
+#lift-pop #lift-range { flex: 1; }
+#lift-pop .pop-hint { font-size: 12.5px; color: #868e96; line-height: 1.5; }
 #color-pop .color.custom { display: inline-block; box-sizing: border-box; cursor: pointer; background: conic-gradient(#e03131, #f08c00, #fab005, #2f9e44, #1971c2, #9c36b5, #e03131); }
 #color-pop .pop-row { display: flex; align-items: center; gap: 8px; }
 #color-pop .pop-row .lbl { display: inline; }

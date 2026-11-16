@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v162';
+const APP_VERSION = 'v164';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -539,6 +539,51 @@ function fsGuardExit() {
     toast(board.fingerDraw ? '✋ 手指可以寫字了' : '✋🚫 只有 Apple Pencil 能寫字（防手掌誤觸）');
   };
   updateFingerBtn();
+
+  /* ----- v163：手指落點補正量（🎯）— 食指大小/書寫習慣因人而異，各台裝置記自己的值 ----- */
+  const liftPop = $('lift-pop'), liftRange = $('lift-range'), liftVal = $('lift-val');
+  try {
+    const v = parseInt(localStorage.getItem('moke-fingerLift'), 10);
+    board.fingerLift = isNaN(v) ? 10 : Math.max(0, Math.min(24, v));
+  } catch (e) { board.fingerLift = 10; }
+  liftRange.value = board.fingerLift;
+  liftVal.textContent = board.fingerLift;
+  $('btn-lift').onclick = (e) => {
+    e.stopPropagation();
+    if (liftPop.classList.contains('hidden')) {
+      const r = $('btn-lift').getBoundingClientRect();
+      liftPop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 272)) + 'px';
+      liftPop.style.top = (r.bottom + 6) + 'px';
+      liftPop.classList.remove('hidden');
+    } else {
+      liftPop.classList.add('hidden');
+    }
+  };
+  liftRange.addEventListener('input', () => {
+    board.fingerLift = +liftRange.value;
+    liftVal.textContent = liftRange.value;
+    try { localStorage.setItem('moke-fingerLift', liftRange.value); } catch (e) {}
+  });
+  // v164：左右偏移（手指斜著碰螢幕，左右也會偏，方向因人而異）
+  const liftxRange = $('liftx-range'), liftxVal = $('liftx-val');
+  try {
+    const v = parseInt(localStorage.getItem('moke-fingerShiftX'), 10);
+    board.fingerShiftX = isNaN(v) ? 0 : Math.max(-16, Math.min(16, v));
+  } catch (e) { board.fingerShiftX = 0; }
+  liftxRange.value = board.fingerShiftX;
+  liftxVal.textContent = board.fingerShiftX;
+  liftxRange.addEventListener('input', () => {
+    board.fingerShiftX = +liftxRange.value;
+    liftxVal.textContent = liftxRange.value;
+    try { localStorage.setItem('moke-fingerShiftX', liftxRange.value); } catch (e) {}
+  });
+  document.addEventListener('click', (e) => {
+    if (!liftPop.classList.contains('hidden') && !liftPop.contains(e.target) && !$('btn-lift').contains(e.target)) {
+      liftPop.classList.add('hidden');
+    }
+  });
+  $('topbar').addEventListener('scroll', () => liftPop.classList.add('hidden'), { passive: true });
+  window.addEventListener('resize', () => liftPop.classList.add('hidden'));
 
   /* ----- v145：圖形自動辨識開關（預設開，localStorage 記憶） ----- */
   try { board.autoShape = localStorage.getItem('moke-autoShape') !== '0'; } catch (e) {}

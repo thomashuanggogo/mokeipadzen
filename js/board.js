@@ -46,6 +46,8 @@ class Board {
     this._cropDrag = null; // {handle} 或 {move}
     // v76：手指寫字開關（預設關＝只有 Apple Pencil 能畫，防手掌誤觸）
     this.fingerDraw = true;  // v104：預設手指可寫（南勛：預設手寫，用 Apple Pencil 再按開關切換）
+    this.fingerLift = 10;    // v163：手指落點補正量（px），🎯 按鈕可調 0–24（食指大小/習慣因人而異）
+    this.fingerShiftX = 0;   // v164：手指左右偏移（px），🎯 可調 −16…16（手指是斜著碰螢幕的，左右也會偏）
     // v145：圖形自動辨識（畫圓/直線後停頓 0.6 秒自動變乾淨圖形，預設開；localStorage 可關）
     this.autoShape = true;
     this._autoShapeTimer = null;
@@ -525,9 +527,12 @@ class Board {
      只套用在筆/螢光筆/橡皮擦的落點，選取/拖曳/圖形不動，避免點按錯位 */
   _lift(e, p) {
     if (!e || e.pointerType !== 'touch' || !p) return p;
+    const L = (typeof this.fingerLift === 'number') ? this.fingerLift : 10;    // v163：上下可調
+    const LX = (typeof this.fingerShiftX === 'number') ? this.fingerShiftX : 0; // v164：左右可調
+    if (!L && !LX) return p;
     const sc = (this.view && this.view.scale) || 1;
-    const cy = p.cy - 10 / sc;
-    return Object.assign({}, p, { cy, fy: cy / this._cssH });
+    const cy = p.cy - L / sc, cx = p.cx + LX / sc;
+    return Object.assign({}, p, { cx, cy, fx: cx / this._cssW, fy: cy / this._cssH });
   }
   /* 形狀拖曳開始：快照畫布，拖曳中只還原快照＋畫預覽，不重繪整頁（v19） */
   _beginShapeDrag(d) {

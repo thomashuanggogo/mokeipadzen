@@ -55,6 +55,7 @@
       <button id="btn-rotate-left" title="逆時針旋轉選取（15°）" class="hidden">⟲</button>
       <button id="btn-rotate-right" title="順時針旋轉選取（15°）" class="hidden">⟳</button>
       <button id="btn-finger" title="手指寫字開關（預設關：只有 Apple Pencil 能寫，防手掌誤觸）">✋</button>
+      <button id="btn-lift" title="手指落點補正量（手指寫字時墨往上移的距離，依自己的手指大小調整）">🎯</button>
       <button id="btn-autoshape" title="圖形自動辨識（預設開）：畫圓/直線後停頓 0.6 秒自動變乾淨圖形">⭕</button>
       <button id="btn-clear" title="清除本頁">🧹 <span class="btn-label">清除</span></button>
       <button id="btn-reset-view" title="重置縮放（回到 100%）">⤢ <span class="btn-label">100%</span></button>
@@ -65,6 +66,15 @@
     <!-- v60：時間軸控制列常駐頂部（不用下拉也能播放） -->
     <input type="file" id="file-image" accept="image/*" class="hidden">
   </header>
+
+  <!-- v163：手指落點補正量 popover（🎯） -->
+  <div id="lift-pop" class="hidden">
+    <div class="pop-row"><label class="lbl">手指落點補正（上下）</label><span id="lift-val">10</span></div>
+    <div class="pop-row"><input type="range" id="lift-range" min="0" max="24" step="1" value="10"></div>
+    <div class="pop-row"><label class="lbl">左右偏移</label><span id="liftx-val">0</span></div>
+    <div class="pop-row"><input type="range" id="liftx-range" min="-16" max="16" step="1" value="0"></div>
+    <div class="pop-hint">上下：墨往上移的距離，手指大、用指腹寫的人調大。左右：覺得墨偏左就往右調、偏右就往左調。0＝不補正。設定會記住。</div>
+  </div>
 
   <!-- 講者視圖面板（v13）：Preview Next，老師端專用 -->
   <!-- 主區 -->
@@ -236,6 +246,7 @@
       <p style="margin:8px 0"><b>✅ 完成</b>：結束調整，圖片固定下來。</p>
       <p style="margin:8px 0"><b>✋ 手指寫字</b>：開＝手指＋筆都能寫；關＝只留 Apple Pencil（防手掌誤觸）。</p>
       <p style="margin:8px 0"><b>👆 手指落點補正</b>：用手指寫字時，墨會自動出現在指尖瞄準處，比較對得準。</p>
+      <p style="margin:8px 0"><b>🎯 補正量</b>：點頂部 🎯，依自己的手指大小調補正量（上下、左右都能調），調好會記住。</p>
       <p style="margin:8px 0"><b>⭕ 圖形辨識</b>：開（按鈕亮）＝用畫筆畫完停頓 0.6 秒，歪圓自動變圓、抖線變直線。<br>只認圓和直線，其他不辨識；太小的筆跡不理。<br>關（按鈕暗）＝筆跡照原樣。設定會記住。</p>
       <p style="margin:8px 0"><b>⟲ 逆時針旋轉</b>：先選取，再按一下轉 15°。</p>
       <p style="margin:8px 0"><b>⟳ 順時針旋轉</b>：先選取，再按一下轉 15°。</p>
