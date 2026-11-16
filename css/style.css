@@ -166,6 +166,9 @@ body.img-adjusting #topbar { background: #8a4b00; }
   transform: translate(-50%, -50%);
   background: rgba(255,255,255,.55); border-radius: 2px;
 }
+#tl-zoom { display: flex; align-items: center; gap: 4px; margin-left: 10px; white-space: nowrap; }
+#tl-zoom button { background: #343a40; color: #fff; border: 1px solid #495057; border-radius: 8px; font-size: 15px; padding: 6px 10px; cursor: pointer; }
+#tl-zoom-label { color: #adb5bd; font-size: 13px; min-width: 92px; font-variant-numeric: tabular-nums; }
 #tl-time { font-variant-numeric: tabular-nums; font-size: 15px; white-space: nowrap; }
 #tl-marker { font-size: 15px; }
 #tl-speed { background: #343a40; color: #fff; border: 1px solid #495057; border-radius: 8px; font-size: 16px; padding: 8px; }

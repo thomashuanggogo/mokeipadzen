@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v170';
+const APP_VERSION = 'v171';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -354,6 +354,7 @@ function fsGuardExit() {
     $('tl-time').textContent = '00:00 / 00:00';
     const seek = $('tl-seek');
     if (seek) { seek.max = 1; seek.value = 0; }
+    tlView = null;   // v171：換頁重置縮放
     if (TLC.active) {
       renderTlTicks(tlDuration());
       renderTlStrip();
@@ -1138,6 +1139,7 @@ function fsGuardExit() {
       }).length;
       const tlMarkerEl = $('tl-marker');
       if (tlMarkerEl) tlMarkerEl.textContent = stops.length ? `📍 ${idx}/${stops.length}` : '';
+      tlFollow(t, live);   // v171：播放頭移出縮放窗口時，窗口跟著移
       updateTlPlayhead(t, live);
       $('tl-handle-label').textContent = (t < live - 50) ? '⏪ 回放中 · 上滑收起回到即時' : '上滑收起時間軸';
       schedulePreview();
@@ -1205,6 +1207,7 @@ function fsGuardExit() {
     }
     // v166：抽屜打開＝一律可書寫。就算先前按碼表播放（togglePlay／ensureTLC）鎖住了，打開抽屜也解鎖，行為統一。
     board.lockDraw = false;
+    tlView = null;   // v171：每次打開抽屜先看全部
     $('tl-speed').value = '1'; $('tl-speed-label').textContent = '1x'; TLC.setSpeed(1);
     $('tl-pull').classList.add('open');
     $('tl-handle-label').textContent = '上滑收起時間軸';
@@ -1277,6 +1280,10 @@ function fsGuardExit() {
   };
   $('btn-tl-start').onclick = () => { if (ensureTLC()) TLC.goTo(0); };
   $('btn-tl-end').onclick = () => { if (ensureTLC()) TLC.goTo(TLC.liveEdge()); };
+  /* v171：時間軸縮放（拉近看就不密了） */
+  $('btn-tl-zoom-in').onclick = () => { if (ensureTLC()) tlZoomBy(0.5); };
+  $('btn-tl-zoom-out').onclick = () => { if (ensureTLC()) tlZoomBy(2); };
+  $('btn-tl-zoom-all').onclick = () => { if (ensureTLC()) { tlView = null; renderTlTicks(tlDuration()); renderTlStrip(); } };
   $('btn-tl-prev').onclick = () => { if (ensureTLC()) TLC.prevStop(); };
   $('btn-tl-prev-stroke').onclick = () => { if (ensureTLC()) TLC.prevStroke(); };
   $('btn-tl-next-stroke').onclick = () => {
@@ -1328,13 +1335,18 @@ function fsGuardExit() {
     const pg = board.page;
     // v49：duration 為 0 時用 1 代替，避免第一筆（tlT=0）畫不出刻度
     const dur = (duration && duration > 0) ? duration : 1;
+    updTlZoomLabel(dur);
     if (!pg.strokes.length && !(pg.tl && pg.tl.stops.length)) return;
-    // 筆劃刻度：每筆一刻度，位置 = tlT / duration
+    // 筆劃刻度：每筆一刻度；v171：位置改用縮放窗口換算，窗口外的不畫
+    const w = tlWin(dur);
+    updTlZoomLabel(dur);
     for (const s of pg.strokes) {
       const t = (s.tlT === undefined ? 0 : s.tlT);
+      const x = (t - w.start) / w.len * 100;
+      if (x < -0.5 || x > 100.5) continue;
       const d = document.createElement('div');
       d.className = 'tl-tick-stroke';
-      d.style.left = (Math.max(0, Math.min(100, t / dur * 100))).toFixed(2) + '%';
+      d.style.left = (Math.max(0, Math.min(100, x))).toFixed(2) + '%';
       box.appendChild(d);
     }
     // 段落標記（綁筆跡，用筆跡的 tlT 定位）
@@ -1343,10 +1355,12 @@ function fsGuardExit() {
       const st = byId.get(m.strokeId);
       if (!st) continue;
       const t = (st.tlT === undefined ? 0 : st.tlT);
+      const x = (t - w.start) / w.len * 100;
+      if (x < -0.5 || x > 100.5) continue;
       const d = document.createElement('div');
       d.className = 'tl-tick';
       d.title = m.label || '標記';
-      d.style.left = (Math.max(0, Math.min(100, t / dur * 100))).toFixed(2) + '%';
+      d.style.left = (Math.max(0, Math.min(100, x))).toFixed(2) + '%';
       box.appendChild(d);
     }
   }
@@ -1396,8 +1410,52 @@ function fsGuardExit() {
   function updateTlPlayhead(t, d) {
     const ph = $('tl-playhead');
     if (!ph || !d || d <= 0) return;
-    // v47：t 已是該頁相對時間，直接定位
-    ph.style.left = (Math.max(0, Math.min(100, t / d * 100))).toFixed(2) + '%';
+    // v47：t 已是該頁相對時間；v171：改用縮放窗口定位，窗口外先藏起來
+    const w = tlWin(d);
+    const x = (t - w.start) / w.len * 100;
+    ph.style.display = (x < 0 || x > 100) ? 'none' : '';
+    ph.style.left = (Math.max(0, Math.min(100, x))).toFixed(2) + '%';
+  }
+  /* v171：時間軸縮放窗口（學長回饋：筆多時軌道太密）。只影響刻度列與編輯 strip 的顯示；
+     tl-seek 維持全長導覽。tlView=null 表示看全部。 */
+  let tlView = null;
+  function tlWin(dur) {
+    if (!dur || dur <= 0) return { start: 0, len: 1 };
+    if (!tlView) return { start: 0, len: dur };
+    const len = Math.min(tlView.len, dur);
+    const start = Math.max(0, Math.min(tlView.start, dur - len));
+    return { start, len };
+  }
+  function tlFollow(t, dur) {
+    if (!tlView || !dur) return;
+    const w = tlWin(dur);
+    if (t >= w.start && t <= w.start + w.len) return;
+    let start = t - w.len * 0.25;
+    start = Math.max(0, Math.min(start, Math.max(0, dur - w.len)));
+    if (Math.abs(start - w.start) < 1) return;
+    tlView = { start, len: w.len };
+    renderTlTicks(dur);
+    renderTlStrip();
+  }
+  function updTlZoomLabel(dur) {
+    const el = $('tl-zoom-label');
+    if (!el) return;
+    if (!tlView || !dur) { el.textContent = ''; return; }
+    const w = tlWin(dur);
+    el.textContent = fmtTime(w.start) + '–' + fmtTime(w.start + w.len);
+  }
+  function tlZoomBy(f) {
+    const dur = tlDuration();
+    if (!dur) return;
+    const w = tlWin(dur);
+    const ph = TLC.active ? TLC.playhead : w.start + w.len / 2;
+    const anchor = (ph >= w.start && ph <= w.start + w.len) ? ph : w.start + w.len / 2;
+    const len = Math.max(3000, Math.min(dur, w.len * f));
+    let start = anchor - (anchor - w.start) / w.len * len;
+    start = Math.max(0, Math.min(start, dur - len));
+    tlView = (len >= dur) ? null : { start, len };
+    renderTlTicks(dur);
+    renderTlStrip();
   }
   // v47：每頁獨立——直接讀當頁筆跡，不再遍歷全域事件簿
   function renderTlStrip(duration) {
@@ -1410,12 +1468,16 @@ function fsGuardExit() {
     const pg = board.page;
     if (!pg.strokes.length && !(pg.tl && pg.tl.stops.length)) return;
     const strokes = pg.strokes;
+    const w = tlWin(dur);   // v171：縮放窗口
     strokes.forEach((s, idx) => {
       const t = (s.tlT === undefined ? 0 : s.tlT);
+      const x = (t - w.start) / w.len * 100;
+      const wid = Math.max(0.8, ((s.dur || 300) / w.len * 100));
+      if (x + wid < 0 || x > 100) return;   // 窗口外不畫
       const n = document.createElement('div');
       n.className = 'tl-stroke tool-' + (s.tool || 'pen');
-      n.style.left = (Math.max(0, Math.min(100, t / dur * 100))).toFixed(2) + '%';
-      n.style.width = Math.max(0.8, ((s.dur || 300) / dur * 100)).toFixed(2) + '%';
+      n.style.left = x.toFixed(2) + '%';
+      n.style.width = wid.toFixed(2) + '%';
       n.title = `${s.tool || 'pen'} · ${fmtTime(t)}`;
       if (tlEditSelIds.has(s.id)) n.classList.add('selected');
       n.addEventListener('pointerdown', pe => { pe.preventDefault(); selectTlStroke(s.id); });
@@ -1426,11 +1488,13 @@ function fsGuardExit() {
       const st = byId.get(m.strokeId);
       if (!st) continue;
       const t = (st.tlT === undefined ? 0 : st.tlT);
+      const x = (t - w.start) / w.len * 100;
+      if (x < -2 || x > 102) continue;
       const f = document.createElement('div');
       f.className = 'tl-flag';
       f.textContent = '🚩';
       f.title = m.label || '';
-      f.style.left = (Math.max(0, Math.min(100, t / dur * 100))).toFixed(2) + '%';
+      f.style.left = (Math.max(0, Math.min(100, x))).toFixed(2) + '%';
       f.addEventListener('pointerdown', ev => tlFlagDrag(ev, m));
       strip.appendChild(f);
     }
@@ -1491,7 +1555,8 @@ function fsGuardExit() {
     let pendingId = m.strokeId;
     const move = (ev) => {
       const r = strip.getBoundingClientRect();
-      const t = (ev.clientX - r.left) / r.width * dur;
+      const w = tlWin(dur);   // v171：縮放窗口換算
+      const t = w.start + (ev.clientX - r.left) / r.width * w.len;
       let best = strokes[0], bd = Math.abs((strokes[0].tlT === undefined ? 0 : strokes[0].tlT) - t);
       for (const s of strokes) {
         const st = (s.tlT === undefined ? 0 : s.tlT);
@@ -1500,7 +1565,7 @@ function fsGuardExit() {
       }
       pendingId = best.id;
       const bt = (best.tlT === undefined ? 0 : best.tlT);
-      target.style.left = (Math.max(0, Math.min(100, bt / dur * 100))).toFixed(2) + '%';
+      target.style.left = (Math.max(0, Math.min(100, (bt - w.start) / w.len * 100))).toFixed(2) + '%';
     };
     const up = () => {
       window.removeEventListener('pointermove', move);
@@ -1535,7 +1600,8 @@ function fsGuardExit() {
     const strip = $('tl-strip'), dur = tlDuration();
     if (!dur) return;
     const r = strip.getBoundingClientRect();
-    const t = (e.clientX - r.left) / r.width * dur;
+    const w = tlWin(dur);   // v171：縮放窗口換算
+    const t = w.start + (e.clientX - r.left) / r.width * w.len;
     // v47：雙擊補標記——綁到最接近該時間的筆跡（當頁獨立）
     const pg = board.page;
     const strokes = pg.strokes.slice().sort((a, b) =>

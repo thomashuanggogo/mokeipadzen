@@ -149,6 +149,12 @@
               <input type="range" id="tl-seek" min="0" max="100" value="0" step="1">
               <div id="tl-ticks"></div>
             </div>
+            <div id="tl-zoom">
+              <button id="btn-tl-zoom-out" title="看更多（縮小時間軸）">－</button>
+              <button id="btn-tl-zoom-in" title="拉近看（放大時間軸）">＋</button>
+              <button id="btn-tl-zoom-all" title="看全部">全部</button>
+              <span id="tl-zoom-label"></span>
+            </div>
           </div>
           <div id="tl-edit-panel" class="hidden">
             <div id="tl-strip"><div id="tl-playhead"></div></div>
@@ -234,6 +240,8 @@
       <p style="margin:8px 0"><b>▶ 下一筆</b>：播放頭前進到下一筆筆跡。<span style="color:#f08c00">橘底</span></p>
       <p style="margin:8px 0"><b>▶ 播放</b>：一點就從頭重播，不用展開時間軸；播完自動回書寫。<span style="color:#2b8a3e">綠底</span></p>
       <p style="margin:8px 0"><b>✎ 筆跡編輯</b>：點時間軸上的筆跡條多選，再一次刪掉多筆。</p>
+      <p style="margin:8px 0"><b>＋ 時間軸放大</b>：筆太多擠在一起時，按時間軸右邊的 ＋ 拉近看，筆跡就散開了。</p>
+      <p style="margin:8px 0"><b>－ 時間軸縮小</b>：按 － 看更多；按「全部」回到看整段。</p>
       <p style="margin:8px 0"><b>00:00 碼表</b>：顯示目前／總時間；點一下＝播放／暫停。</p>
       <p style="margin:8px 0"><b>⏱ 速度</b>：拖曳調整重播速度，0.5x～10x。</p>
       <p style="margin:8px 0"><b>✕ 回到即時</b>：退出重播、收起時間軸，播放頭回到即時進度。</p>
