@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v176';
+const APP_VERSION = 'v177';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -1352,7 +1352,26 @@ function fsGuardExit() {
     // 筆劃刻度：每筆一刻度；v171：位置改用縮放窗口換算，窗口外的不畫
     const w = tlWin(dur);
     updTlZoomLabel(dur);
-    for (const s of pg.strokes) {
+    // v177：窗口 > 30 秒時改畫波形密度（格高＝該段筆數，平滑過），總覽不再是梳子
+    if (w.len > 30000 && pg.strokes.length) {
+      const NB = 72;
+      const counts = new Array(NB).fill(0);
+      for (const s of pg.strokes) {
+        const t = (s.tlT === undefined ? 0 : s.tlT);
+        const idx = Math.floor((t - w.start) / w.len * NB);
+        if (idx >= 0 && idx < NB) counts[idx]++;
+      }
+      const sm = counts.map((c, i) => ((counts[i - 1] || 0) + 2 * c + (counts[i + 1] || 0)) / 4);
+      const mx = Math.max(1, ...sm);
+      for (let i = 0; i < NB; i++) {
+        if (!counts[i]) continue;
+        const d = document.createElement('div');
+        d.className = 'tl-tick-density';
+        d.style.left = ((i + 0.5) / NB * 100).toFixed(2) + '%';
+        d.style.height = Math.max(4, Math.round(22 * sm[i] / mx)) + 'px';
+        box.appendChild(d);
+      }
+    } else for (const s of pg.strokes) {
       const t = (s.tlT === undefined ? 0 : s.tlT);
       const x = (t - w.start) / w.len * 100;
       if (x < -0.5 || x > 100.5) continue;
