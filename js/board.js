@@ -20,6 +20,8 @@ class Board {
     this.onDrawEnd = null;        // 提筆後鉤子
     this.tlCutoff = null;         // v47：時間軸回放過濾（null＝全顯示，否則只畫 tlT <= cutoff 的筆跡）
     this._tlPlayhead = null;        // v47：回放中落筆時，筆跡的時間（null＝用自然時間）
+    this._tlInsertNext = 0;         // v175：補線游標（下一筆插入的時間點）
+    this._tlInsertFor = null;       // v175：游標所屬的播放頭位置
     this.rippleOk = true;           // v173/v174：刪除後漣波補位（墨課不錄音，無條件補位；此旗標保留備用）
     this.lockDraw = false;          // v50：時間軸打開時鎖定書寫
     this.onLockDraw = null;         // v50：鎖定時嘗試書寫的回調（提示用）
@@ -330,6 +332,10 @@ class Board {
       }
       if (type === 'add' && data && data.stroke && data.stroke.tlT === undefined) {
         data.stroke.tlT = t;
+      }
+      // v175：補線游標接續——同一播放頭的下一筆接在這一筆後面
+      if (type === 'add' && this._tlPlayhead !== null && this._tlPlayhead !== undefined) {
+        this._tlInsertNext = t + ((data && data.stroke && data.stroke.dur) || 300);
       }
       tl.events.push({ t, evt: type, data: data || {} });
     }

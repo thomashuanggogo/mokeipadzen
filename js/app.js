@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v174';
+const APP_VERSION = 'v175';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -1309,15 +1309,19 @@ function fsGuardExit() {
     TLC.setSpeed(v);
   };
 
-  /* v172：回放中落筆/擦除＝先回到結尾再編輯（取代 v47 的「插入 playhead」：
-     插入會把時間分叉——新筆卡在時間軸中間、擦除的筆拉一拉又復活。回到結尾，新筆接最後、擦了就是擦了） */
+  /* v175：回放中落筆＝在播放頭原地補線（學長回饋：要補線時被 v172 跳到結尾，補的線出現時機全錯）。
+     v172 的防復活保留（eraseT 記該筆自己的 tlT）——當年時間分叉的元兇是擦除用了本機時鐘，不是插入本身。
+     同一播放頭連續補筆：_tlInsertNext 游標接續（前一筆 tlT＋dur），不疊在同一瞬間；拉動播放頭換位置就重置。 */
   board.onDrawStart = () => {
     if (!TLC.active) { board._tlPlayhead = null; return; }
     if (TLC.playing) TLC.pause();
-    if (TLC.isLive()) { board._tlPlayhead = null; return; }
-    TLC.goTo(TLC.liveEdge());
-    board._tlPlayhead = null;
-    toast('⏩ 已回到結尾編輯：新筆接在最後面', 2000);
+    if (TLC.isLive()) { board._tlPlayhead = null; board._tlInsertFor = null; return; }
+    if (board._tlInsertFor !== TLC.playhead) {
+      board._tlInsertFor = TLC.playhead;
+      board._tlInsertNext = Math.max(1, Math.round(TLC.playhead));
+      toast('✏️ 在此處補線：新筆插在播放頭的位置', 1800);
+    }
+    board._tlPlayhead = board._tlInsertNext;
   };
   board.onDrawEnd = () => {
     board._tlPlayhead = null;
