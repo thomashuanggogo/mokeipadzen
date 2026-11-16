@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v171';
+const APP_VERSION = 'v172';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -1308,12 +1308,15 @@ function fsGuardExit() {
     TLC.setSpeed(v);
   };
 
-  /* 回放中落筆＝直接寫在 playhead 時間點（v47 簡化版，不位移後方筆跡） */
+  /* v172：回放中落筆/擦除＝先回到結尾再編輯（取代 v47 的「插入 playhead」：
+     插入會把時間分叉——新筆卡在時間軸中間、擦除的筆拉一拉又復活。回到結尾，新筆接最後、擦了就是擦了） */
   board.onDrawStart = () => {
     if (!TLC.active) { board._tlPlayhead = null; return; }
     if (TLC.playing) TLC.pause();
-    // 若不在 live，用 playhead 時間；否則用 null（自然時間）
-    board._tlPlayhead = TLC.isLive() ? null : Math.round(TLC.playhead);
+    if (TLC.isLive()) { board._tlPlayhead = null; return; }
+    TLC.goTo(TLC.liveEdge());
+    board._tlPlayhead = null;
+    toast('⏩ 已回到結尾編輯：新筆接在最後面', 2000);
   };
   board.onDrawEnd = () => {
     board._tlPlayhead = null;

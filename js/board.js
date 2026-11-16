@@ -310,6 +310,16 @@ class Board {
       let t = Math.round(tl.clock.now());
       // v99：時間戳最小為 1，避免 tlT=0 在 cutoff=0 時被顯示（拉到最前應為空白）
       if (t < 1) t = 1;
+      // v172：新事件不得早於本頁結尾——轉檔課舊筆跡自帶 Doceri 原始時間，
+      // 本機時鐘卻從 0 起算，不夾住的話新筆會被蓋到時間軸最前面（兩套時間）。
+      if ((type === 'add' || type === 'erase') && (this._tlPlayhead === null || this._tlPlayhead === undefined)) {
+        const edge = Math.round(this._liveEdgeT());
+        if (t < edge) {
+          t = edge;
+          tl.clock.base = edge;
+          if (tl.clock.running) tl.clock.t0 = performance.now();
+        }
+      }
       // v101：任何時間軸事件都算動作（復原/重做按鈕不走 _down，這裡補上）
       this._lastActivity = performance.now();
       if (tl.clock && !tl.clock.running) tl.clock.resume();
@@ -379,11 +389,11 @@ class Board {
     const ids = new Set(removed.map(s => s.id));
     this.page.undo = this.page.undo.filter(s => !ids.has(s.id));
     this.page.redo.push(...removed);
-    // v96：記錄擦除時間，供重播時判斷顯示/隱藏
-    const eraseT = this.page.tl && this.page.tl.clock ? Math.round(this.page.tl.clock.now()) : 0;
+    // v172：擦除即生效——eraseT 記為該筆自己的 tlT，重播時該筆不再復活。
+    // （v96 舊制用時鐘時間：轉檔課上 eraseT 會大於被擦筆的 tlT，拉時間軸到中間時被擦的筆又被畫回來，像沒擦掉）
     if (!this.page.tl.erased) this.page.tl.erased = [];
     for (const s of removed) {
-      this.page.tl.erased.push({ stroke: s, eraseT });
+      this.page.tl.erased.push({ stroke: s, eraseT: (s.tlT === undefined ? 0 : s.tlT) });
     }
     this._emit('erase', { page: this.pageIndex, ids: removed.map(s => s.id) });  // v94：橡皮擦＝時間軸事件，重播時會看到擦除動作
     this.render();
