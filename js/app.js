@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v166';
+const APP_VERSION = 'v167';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -544,8 +544,8 @@ function fsGuardExit() {
   const liftPop = $('lift-pop'), liftRange = $('lift-range'), liftVal = $('lift-val');
   try {
     const v = parseInt(localStorage.getItem('moke-fingerLift'), 10);
-    board.fingerLift = isNaN(v) ? 10 : Math.max(0, Math.min(24, v));
-  } catch (e) { board.fingerLift = 10; }
+    board.fingerLift = isNaN(v) ? 0 : Math.max(0, Math.min(24, v));
+  } catch (e) { board.fingerLift = 0; }
   liftRange.value = board.fingerLift;
   liftVal.textContent = board.fingerLift;
   $('btn-lift').onclick = (e) => {
