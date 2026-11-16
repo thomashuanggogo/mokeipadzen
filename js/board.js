@@ -20,6 +20,7 @@ class Board {
     this.onDrawEnd = null;        // 提筆後鉤子
     this.tlCutoff = null;         // v47：時間軸回放過濾（null＝全顯示，否則只畫 tlT <= cutoff 的筆跡）
     this._tlPlayhead = null;        // v47：回放中落筆時，筆跡的時間（null＝用自然時間）
+    this.rippleOk = true;           // v173/v174：刪除後漣波補位（墨課不錄音，無條件補位；此旗標保留備用）
     this.lockDraw = false;          // v50：時間軸打開時鎖定書寫
     this.onLockDraw = null;         // v50：鎖定時嘗試書寫的回調（提示用）
     this._strokeSeq = 1;
@@ -396,7 +397,50 @@ class Board {
       this.page.tl.erased.push({ stroke: s, eraseT: (s.tlT === undefined ? 0 : s.tlT) });
     }
     this._emit('erase', { page: this.pageIndex, ids: removed.map(s => s.id) });  // v94：橡皮擦＝時間軸事件，重播時會看到擦除動作
+    this.rippleCompact(removed);   // v173：刪掉的時間段跟著消除，後面的筆往前補
     this.render();
+  }
+
+  /* v173：漣波補位——移除被刪筆跡佔的時間區間，其後筆跡/事件同步前移，總長跟著縮。
+     v174：墨課沒有錄音功能（2026-11-13 拍板不做、2026-11-16 南勛重申），不需護欄，無條件補位。 */
+  rippleCompact(removed) {
+    if (!removed || !removed.length) return;
+    const pg = this.page;
+    const spans = removed
+      .map(s => [s.tlT || 0, (s.tlT || 0) + (s.dur || 300)])
+      .sort((a, b) => a[0] - b[0]);
+    if (!spans.length) return;
+    const merged = [spans[0].slice()];
+    for (let i = 1; i < spans.length; i++) {
+      const last = merged[merged.length - 1];
+      if (spans[i][0] <= last[1]) last[1] = Math.max(last[1], spans[i][1]);
+      else merged.push(spans[i].slice());
+    }
+    const shift = (t) => {
+      let d = 0;
+      for (const [a, b] of merged) {
+        if (t <= a) break;
+        d += Math.min(b, t) - a;
+      }
+      return d;
+    };
+    for (const s of pg.strokes) {
+      if (s.tlT) s.tlT -= shift(s.tlT);
+    }
+    if (pg.tl) {
+      for (const ev of pg.tl.events) ev.t -= shift(ev.t);
+      if (pg.tl.erased) {
+        for (const e of pg.tl.erased) {
+          if (removed.includes(e.stroke)) { e.eraseT = 0; continue; }  // 剛刪的筆不釘住結尾，總長才縮得下來
+          if (e.stroke.tlT) e.stroke.tlT -= shift(e.stroke.tlT);
+          e.eraseT = (e.stroke.tlT || 0);
+        }
+      }
+      if (pg.tl.clock) {
+        pg.tl.clock.base = Math.round(this._liveEdgeT());
+        if (pg.tl.clock.running) pg.tl.clock.t0 = performance.now();
+      }
+    }
   }
 
   _hitStroke(s, x, y) {

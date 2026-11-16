@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v172';
+const APP_VERSION = 'v173';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -851,6 +851,7 @@ function fsGuardExit() {
   }
   function loadLessonToBoard(l) {
     if (TLC.active) closeTimeline();
+    board.rippleOk = true;   // v174：墨課不錄音，刪除後一律補位
     // v47：載入每頁獨立時間軸格式
     if (l.v === 47 && l.pages) {
       board.pages = l.pages.map(p => ({
@@ -1520,6 +1521,7 @@ function fsGuardExit() {
     TLC.pause();
     const pg = board.page;
     const sids = new Set(tlEditSelIds);
+    const removedStrokes = pg.strokes.filter(s => sids.has(s.id));   // v173：補位需要被刪筆的時間區間
     // 從畫布刪除
     pg.strokes = pg.strokes.filter(s => !sids.has(s.id));
     pg.undo = pg.undo.filter(s => !sids.has(s.id));
@@ -1532,6 +1534,7 @@ function fsGuardExit() {
     }
     tlEditSelIds.clear();
     $('btn-tl-del-stroke').classList.add('hidden');
+    board.rippleCompact(removedStrokes);   // v173：刪掉的時間段跟著消除
     board.render();
     TLC.goTo(Math.min(TLC.playhead, TLC.liveEdge()));
     renderTlTicks(tlDuration());
