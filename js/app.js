@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v164';
+const APP_VERSION = 'v165';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -1192,9 +1192,8 @@ function fsGuardExit() {
         toast('還沒有筆跡時間軸，先寫幾個字吧'); return;
       }
       TLC.activate();
-      // v50：時間軸打開時鎖定畫布書寫，只能拉時間軸
-      board.lockDraw = true;
-      board.onLockDraw = () => toast('收起時間軸後再書寫', 1500);
+      // v165：抽屜開著也能書寫（v50 的鎖與 v47「回放中落筆＝插入」設計打架，學長反應要收起才能寫）。
+      // 拉回中間落筆＝插在 playhead 時間；即時端落筆＝自然接在最後。播放鈕（碼表）的鎖維持不變。
     }
     $('tl-speed').value = '1'; $('tl-speed-label').textContent = '1x'; TLC.setSpeed(1);
     $('tl-pull').classList.add('open');

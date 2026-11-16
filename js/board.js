@@ -534,6 +534,23 @@ class Board {
     const cy = p.cy - L / sc, cx = p.cx + LX / sc;
     return Object.assign({}, p, { cx, cy, fx: cx / this._cssW, fy: cy / this._cssH });
   }
+  /* v165：lockBg 頁（轉檔匯入）的筆跡座標以整頁底圖為準（render 用底圖 fit 座標系繪製）。
+     輸入端必須把觸點從畫布座標換算進底圖座標，否則寫的當下跟手、放筆重繪時整筆往畫面中心縮：
+     正中間準、左邊往右偏、右邊往左偏（畫布比 16:9 寬時最明顯，如 iPad mini）。 */
+  _lockBounds() {
+    const pg = this.page;
+    if (!pg || !pg.lockBg) return null;
+    const im = this._migrateImages(pg)[0];
+    return im ? this._imgBounds(im) : null;
+  }
+  _toImgSpace(p) {
+    const b = this._lockBounds();
+    if (!b || !p) return p;
+    const fx = (p.cx - b.x0) / (b.x1 - b.x0), fy = (p.cy - b.y0) / (b.y1 - b.y0);
+    return Object.assign({}, p, { fx, fy });
+  }
+  /* 書寫落點：手指補正（畫布座標）→ 底圖座標換算（lockBg 頁），筆/螢光筆/橡皮擦共用 */
+  _inkPos(e, p) { return this._toImgSpace(this._lift(e, p)); }
   /* 形狀拖曳開始：快照畫布，拖曳中只還原快照＋畫預覽，不重繪整頁（v19） */
   _beginShapeDrag(d) {
     this._shapeDrag = d;
@@ -1015,7 +1032,7 @@ class Board {
     if (this.tool === 'hand') { this._handDown(p); return; }
     // v105：套索工具—框選或拖曳已選筆跡
     if (this.tool === 'lasso') { this._lassoDown(p); return; }
-    if (this.tool === 'eraser') { const lp = this._lift(e, p); this.eraseAt(lp.fx, lp.fy); this._erasing = true; return; }
+    if (this.tool === 'eraser') { const lp = this._inkPos(e, p); this.eraseAt(lp.fx, lp.fy); this._erasing = true; return; }
     if (this.tool === 'text') { if (this.onTextTap) this.onTextTap(p.fx, p.fy); return; }
     if (['line', 'arrow', 'rect', 'ellipse', 'rtriangle', 'parallelogram', 'axes'].includes(this.tool)) {
       this._beginShapeDrag({ shape: this.tool, fx0: p.fx, fy0: p.fy, fx1: p.fx, fy1: p.fy, t: performance.now() });
@@ -1045,7 +1062,7 @@ class Board {
     }
     const s = this._newStroke(this.tool);
     const pr0 = this._press(e);  // v145：首點壓感
-    const lp0 = this._lift(e, p);  // v162：手指補正
+    const lp0 = this._inkPos(e, p);  // v162：手指補正；v165：lockBg 換算
     s.pts.push([0, lp0.fx, lp0.fy, pr0]);
     s._pressSm = pr0;  // v145：壓感平滑狀態（暫存，_up 時刪除不存檔）
     s._startPerf = performance.now();
@@ -1224,7 +1241,7 @@ class Board {
     }
     const p = this._pos(e);
     if (this.tool === 'laser' && e.buttons) { this._laser(p.x, p.y); return; }
-    if (this._erasing) { const lp = this._lift(e, p); this.eraseAt(lp.fx, lp.fy); return; }
+    if (this._erasing) { const lp = this._inkPos(e, p); this.eraseAt(lp.fx, lp.fy); return; }
     if (this._shapeDrag) {
       const d = this._shapeDrag;
       if (d._compass) {
@@ -1263,7 +1280,7 @@ class Board {
       const evts = (e.getCoalescedEvents ? e.getCoalescedEvents() : [e]);
       let added = false;
       for (const ce of evts) {
-        const p = this._lift(ce, this._pos(ce, rect));  // v162：手指補正
+        const p = this._inkPos(ce, this._pos(ce, rect));  // v162：手指補正；v165：lockBg 換算
         const dt = performance.now() - this._drawing._startPerf;
         const last = this._drawing.pts[this._drawing.pts.length - 1];
         // 過濾過近的點，省空間
@@ -2010,6 +2027,9 @@ class Board {
     const dpr = window.devicePixelRatio || 1, v = this.view;
     ctx.save();
     ctx.setTransform(dpr * v.scale, 0, 0, dpr * v.scale, dpr * v.ox, dpr * v.oy);
+    // v165：lockBg 頁即時筆跡也要套底圖座標系（同 render），否則放筆時整筆跳位
+    const lockB = this._lockBounds();
+    if (lockB) { ctx.translate(lockB.x0, lockB.y0); ctx.scale((lockB.x1 - lockB.x0) / this._cssW, (lockB.y1 - lockB.y0) / this._cssH); }
     this.drawStroke(ctx, s, 1, this._cssW, this._cssH);
     ctx.restore();
   }
@@ -2024,6 +2044,9 @@ class Board {
     ctx.save();
     // v42：套用縮放變換（線寬除以 scale 保持視覺粗細一致）
     ctx.setTransform(dpr * v.scale, 0, 0, dpr * v.scale, dpr * v.ox, dpr * v.oy);
+    // v165：lockBg 頁即時筆跡也要套底圖座標系（同 render），否則放筆時整筆跳位
+    const lockB = this._lockBounds();
+    if (lockB) { ctx.translate(lockB.x0, lockB.y0); ctx.scale((lockB.x1 - lockB.x0) / W, (lockB.y1 - lockB.y0) / H); }
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     ctx.strokeStyle = s.color; ctx.lineWidth = s.width * k / v.scale;
     if (s.tool === 'highlighter') ctx.globalAlpha = 0.35;
