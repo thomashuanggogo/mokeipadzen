@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v178';
+const APP_VERSION = 'v179';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -678,7 +678,8 @@ function fsGuardExit() {
       const strokes = board.page.strokes;
       const st = strokes.find(s => s.id === m.strokeId);
       const t = st ? (st.tlT === undefined ? 0 : st.tlT) : 0;
-      toast('🚩 已標記：' + m.label + '（' + fmtTime(t) + '）');
+      if (m.removed) toast('🚩 已移除標記（' + fmtTime(t) + '）');
+      else toast('🚩 已標記：' + m.label + '（' + fmtTime(t) + '）');
       if (TLC.active) { renderTlTicks(tlDuration()); renderTlStrip(); TLC._ui(); }
       schedulePreview();
     } else {

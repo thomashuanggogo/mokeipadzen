@@ -792,6 +792,16 @@ class TimelineController {
         if (t < tt) target = s;
       }
     }
+    // v179：學長要求——同一筆已有標記＝再按一次移除（toggle，不再疊標記）
+    const tt = (target.tlT === undefined ? 0 : target.tlT);
+    let removed = 0;
+    for (let i = this.tl.stops.length - 1; i >= 0; i--) {
+      if (this.tl.stops[i].strokeId === target.id) { this.tl.stops.splice(i, 1); removed++; }
+    }
+    if (removed) {
+      this.renumberStops();
+      return { removed, strokeId: target.id, t: tt };
+    }
     const m = { id: 'm' + Date.now().toString(36), strokeId: target.id, label: '' };
     this.tl.stops.push(m);
     this.renumberStops();
