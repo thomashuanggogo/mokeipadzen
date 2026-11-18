@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v180';
+const APP_VERSION = 'v181';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -318,7 +318,33 @@ function fsGuardExit() {
       }
     };
   });
-  $('width-range').oninput = e => board.setWidth(+e.target.value);
+  /* v181：粗細要有數字（南勛：不然都不知道拉到多粗多細）——滑桿右邊即時顯示數值；
+     畫筆與螢光筆各自記住自己的粗細（localStorage，換工具自動切回該工具的數字） */
+  const widthStore = { pen: 5, highlighter: 5 };
+  try {
+    const savedW = JSON.parse(localStorage.getItem('moke-widths') || 'null');
+    if (savedW) {
+      if (+savedW.pen >= 2 && +savedW.pen <= 24) widthStore.pen = +savedW.pen;
+      if (+savedW.highlighter >= 2 && +savedW.highlighter <= 24) widthStore.highlighter = +savedW.highlighter;
+    }
+  } catch (e) {}
+  const syncWidthUI = () => {
+    $('width-range').value = board.width;
+    $('width-val').textContent = board.width;
+  };
+  $('width-range').oninput = e => {
+    board.setWidth(+e.target.value);
+    $('width-val').textContent = e.target.value;
+    if (board.tool === 'pen' || board.tool === 'highlighter') {
+      widthStore[board.tool] = +e.target.value;
+      try { localStorage.setItem('moke-widths', JSON.stringify(widthStore)); } catch (err) {}
+    }
+  };
+  const _setToolOrig = board.setTool.bind(board);
+  board.setTool = (t) => {
+    _setToolOrig(t);
+    if (t === 'pen' || t === 'highlighter') { board.setWidth(widthStore[t]); syncWidthUI(); }
+  };
   // v114：禪模式切換（工具列變左側直條；頂部列保留，🧘 直接開關）
   $('btn-zen').onclick = () => {
     document.body.classList.toggle('zen');

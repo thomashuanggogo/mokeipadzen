@@ -357,6 +357,7 @@ body.guest-mode #rec-controls { visibility: hidden; }
 #color-pop .pop-row { display: flex; align-items: center; gap: 8px; }
 #color-pop .pop-row .lbl { display: inline; }
 #color-pop #width-range { width: 130px; }
+#width-val { min-width: 22px; text-align: right; font-size: 14px; font-weight: 600; color: #444; font-variant-numeric: tabular-nums; }
 /* 碼表按鈕（頂部重播入口之一） */
 #tl-time.rec-btn { font-variant-numeric: tabular-nums; font-size: 14px; white-space: nowrap; }
 #tl-time.playing { background: #2f9e44; border-color: #2f9e44; }
