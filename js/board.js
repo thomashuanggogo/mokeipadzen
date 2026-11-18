@@ -514,7 +514,44 @@ class Board {
     return segs;
   }
 
+  /* v180：移動復原——把一組筆跡的位置存成 {_moveUndo} 紀錄放進 undo/redo 堆疊。
+     先前 undo 只記新增筆跡：移動後按復原不會退回移動、反而刪掉最近一筆（學長實測）。 */
+  _posItems(strokes) {
+    return strokes.map(s => ({ id: s.id, fx: s.fx, fy: s.fy,
+      fx0: s.fx0, fy0: s.fy0, fx1: s.fx1, fy1: s.fy1,
+      pts: s.pts ? s.pts.map(pt => [pt[0], pt[1], pt[2], pt[3]]) : null }));
+  }
+  _applyPosItems(items) {
+    for (const it of items) {
+      const s = this.page.strokes.find(x => x.id === it.id);
+      if (!s) continue;
+      if (it.fx !== undefined) { s.fx = it.fx; s.fy = it.fy; }
+      if (it.fx0 !== undefined) { s.fx0 = it.fx0; s.fy0 = it.fy0; s.fx1 = it.fx1; s.fy1 = it.fy1; }
+      if (it.pts) s.pts = it.pts.map(pt => [pt[0], pt[1], pt[2], pt[3]]);
+    }
+  }
+  _pushMoveUndo(origItems) {
+    if (!origItems || !origItems.length) return;
+    this.page.undo.push({ _moveUndo: 1, items: origItems.map(o => ({ id: o.s.id,
+      fx: o.fx, fy: o.fy, fx0: o.fx0, fy0: o.fy0, fx1: o.fx1, fy1: o.fy1,
+      pts: o.pts ? o.pts.map(pt => [pt[0], pt[1], pt[2], pt[3]]) : null })) });
+    this.page.redo = [];
+  }
+  _moveUndoStep(fromStack, toStack) {
+    const entry = fromStack.pop();
+    if (!entry) return false;
+    if (!entry._moveUndo) { fromStack.push(entry); return false; }
+    const cur = this._posItems(entry.items
+      .map(it => this.page.strokes.find(x => x.id === it.id)).filter(Boolean));
+    toStack.push({ _moveUndo: 1, items: cur });
+    this._applyPosItems(entry.items);
+    this.render();
+    return true;
+  }
+
   undo() {
+    const top = this.page.undo[this.page.undo.length - 1];
+    if (top && top._moveUndo) { this._moveUndoStep(this.page.undo, this.page.redo); return; }
     const s = this.page.undo.pop();
     if (!s) return;
     this.page.strokes = this.page.strokes.filter(x => x.id !== s.id);
@@ -523,6 +560,8 @@ class Board {
     this.render();
   }
   redo() {
+    const top = this.page.redo[this.page.redo.length - 1];
+    if (top && top._moveUndo) { this._moveUndoStep(this.page.redo, this.page.undo); return; }
     const s = this.page.redo.pop();
     if (!s) return;
     this.page.strokes.push(s);
@@ -611,6 +650,19 @@ class Board {
   }
   /* 書寫落點：手指補正（畫布座標）→ 底圖座標換算（lockBg 頁），筆/螢光筆/橡皮擦共用 */
   _inkPos(e, p) { return this._toImgSpace(this._lift(e, p)); }
+  /* v180：選取家族的座標換算——lockBg 頁的筆跡分數是「底圖分數」，換成畫布 px 必須走底圖 bounds；
+     只用畫布寬高換算會整組偏移（v165 只修了寫/畫，點選/套索/選取框/拖曳都中招，學長實測圈不精確）。 */
+  _fracToPx(fx, fy) {
+    const b = this._lockBounds();
+    if (b) return [b.x0 + fx * (b.x1 - b.x0), b.y0 + fy * (b.y1 - b.y0)];
+    return [fx * this._cssW, fy * this._cssH];
+  }
+  /* px 位移 → 分數位移（拖曳用；lockBg 頁除以底圖寬高，不是畫布寬高） */
+  _fracDelta(dxPx, dyPx) {
+    const b = this._lockBounds();
+    if (b) return [dxPx / (b.x1 - b.x0), dyPx / (b.y1 - b.y0)];
+    return [dxPx / this._cssW, dyPx / this._cssH];
+  }
   /* 形狀拖曳開始：快照畫布，拖曳中只還原快照＋畫預覽，不重繪整頁（v19） */
   _beginShapeDrag(d) {
     this._shapeDrag = d;
@@ -791,9 +843,12 @@ class Board {
     for (const s of this.page.strokes) {
       let hit = false;
       if (s.tool === 'text') {
-        hit = Math.hypot(cx - s.fx * W, cy - s.fy * H) <= 32;
+        const [ax, ay] = this._fracToPx(s.fx, s.fy);
+        hit = Math.hypot(cx - ax, cy - ay) <= 32;
       } else if (s.tool === 'shape' && (s.shape === 'line' || s.shape === 'arrow')) {
-        hit = segDist(cx, cy, s.fx0 * W, s.fy0 * H, s.fx1 * W, s.fy1 * H) <= 16;
+        const [ax, ay] = this._fracToPx(s.fx0, s.fy0);
+        const [bx, by] = this._fracToPx(s.fx1, s.fy1);
+        hit = segDist(cx, cy, ax, ay, bx, by) <= 16;
       } else if (s.tool === 'shape') {
         const c = this._strokePointsPx(s, W, H);  // 旋轉後四角，順序 (x0,y0)(x1,y0)(x0,y1)(x1,y1)
         const quad = [c[0], c[1], c[3], c[2]].map(([x, y]) => ({ x, y }));
@@ -803,12 +858,12 @@ class Board {
           hit = segDist(cx, cy, a.x, a.y, b.x, b.y) <= 16;
         }
       } else if (s.pts && s.pts.length) {
-        const pts = s.pts;
-        if (pts.length === 1) {
-          hit = Math.hypot(cx - pts[0][1] * W, cy - pts[0][2] * H) <= 16;
+        const mp = s.pts.map(pt => this._fracToPx(pt[1], pt[2]));
+        if (mp.length === 1) {
+          hit = Math.hypot(cx - mp[0][0], cy - mp[0][1]) <= 16;
         }
-        for (let i = 1; i < pts.length && !hit; i++) {
-          hit = segDist(cx, cy, pts[i - 1][1] * W, pts[i - 1][2] * H, pts[i][1] * W, pts[i][2] * H) <= 16;
+        for (let i = 1; i < mp.length && !hit; i++) {
+          hit = segDist(cx, cy, mp[i - 1][0], mp[i - 1][1], mp[i][0], mp[i][1]) <= 16;
         }
       }
       if (hit) best = s;
@@ -918,15 +973,16 @@ class Board {
     };
     if (s.tool === 'text') {
       // 文字繞 (fx,fy) 旋轉，取錨點即可（選取框用）
-      pts.push([s.fx * W, s.fy * H]);
+      pts.push(this._fracToPx(s.fx, s.fy));
     } else if (s.tool === 'shape') {
-      const x0 = s.fx0 * W, y0 = s.fy0 * H, x1 = s.fx1 * W, y1 = s.fy1 * H;
+      const [x0, y0] = this._fracToPx(s.fx0, s.fy0);
+      const [x1, y1] = this._fracToPx(s.fx1, s.fy1);
       const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
       // 四角都轉，取旋轉後的實際範圍
       pts.push(rotPt(x0, y0, cx, cy), rotPt(x1, y0, cx, cy),
                rotPt(x0, y1, cx, cy), rotPt(x1, y1, cx, cy));
     } else if (s.pts) {
-      for (const pt of s.pts) pts.push([pt[1] * W, pt[2] * H]);
+      for (const pt of s.pts) pts.push(this._fracToPx(pt[1], pt[2]));
     }
     return pts;
   }
@@ -1217,7 +1273,7 @@ class Board {
     if (this._lassoDrag) {
       const p2 = this._pos(e);
       const d = this._lassoDrag;
-      const dx = (p2.cx - d.x0) / this._cssW, dy = (p2.cy - d.y0) / this._cssH;
+      const [dx, dy] = this._fracDelta(p2.cx - d.x0, p2.cy - d.y0);  // v180：lockBg 頁除以底圖寬高
       for (const o of d.orig) {
         const s = o.s;
         if (s.fx !== undefined) { s.fx = this._r4(o.fx + dx); s.fy = this._r4(o.fy + dy); }
@@ -1475,6 +1531,7 @@ class Board {
       const d = this._handDrag;
       this._handDrag = null;
       if (d.moved) {
+        this._pushMoveUndo([{ s: d.stroke, fx: d.fx0, fy: d.fy0 }]);  // v180：文字拖曳也留復原紀錄
         this._emit('move', { page: this.pageIndex, id: d.stroke.id,
           fx: d.stroke.fx, fy: d.stroke.fy, fx0: d.fx0, fy0: d.fy0 });
       }
@@ -1510,6 +1567,7 @@ class Board {
       const d = this._lassoDrag;
       this._lassoDrag = null;
       if (d.moved) {
+        this._pushMoveUndo(d.orig);  // v180：移動留復原紀錄
         for (const o of d.orig) {
           const s = o.s;
           this._emit('move', { page: this.pageIndex, id: s.id,
@@ -1600,7 +1658,10 @@ class Board {
       shape: hit.shape,
       fx0: this._r4(hit.fx0), fy0: this._r4(hit.fy0),
       fx1: this._r4(hit.fx1), fy1: this._r4(hit.fy1),
-      dur: 0
+      dur: 0,
+      // v180：替換圖形繼承原筆跡的 tlT——不繼承的話 _emit 會用當下時間重新蓋章，
+      // 在舊課補筆時被 v172 夾制蓋到整頁結尾，筆跡當場消失（學長實測：中央線往後跳）
+      tlT: s.tlT
     });
     this.addStroke(ns);
     // v148：辨識成圖形也不自動選取（同圖形工具定版行為）
