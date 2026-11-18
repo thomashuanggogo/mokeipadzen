@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v197';
+const APP_VERSION = 'v199';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -609,6 +609,14 @@ function fsGuardExit() {
       ctx.beginPath(); ctx.moveTo(-rr, 0); ctx.lineTo(-rr, 46); ctx.stroke();      // 左繩
       ctx.beginPath(); ctx.moveTo(rr, 0); ctx.lineTo(rr, 46); ctx.stroke();        // 右繩
     },
+    // 角度弧 v198：原版寫死 55° — 南勛規則「不要有固定數字」，改成無數字版（兩射線＋弧，度數老師自己標）
+    angleArc(ctx) {
+      const vx = -20, vy = 20, len = 60, a = -55 * Math.PI / 180;
+      ctx.beginPath(); ctx.moveTo(vx, vy); ctx.lineTo(vx + len, vy); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(vx, vy);
+      ctx.lineTo(vx + len * Math.cos(a), vy + len * Math.sin(a)); ctx.stroke();
+      ctx.beginPath(); ctx.arc(vx, vy, 22, 0, a, true); ctx.stroke();
+    },
   };
   function drawStickerCanvas(type, cw, ch) {
     const def = stickerLib.getDefinition(type);
@@ -638,12 +646,18 @@ function fsGuardExit() {
      整圖（成像圖、整套電路、實驗裝置等組好的整張圖）不進面板 — 南勛：「不需要什麼整圖」；
      特別版本（指定的力、角度、數據）走 maker JSON 匯入，一樣變成圖形物件。
      電阻只收台灣高中畫法（IEC 矩形版不收，免得學生混淆）。 */
+  /* v198：七分類。南勛規則（2026-11-18）：場景圖只收「沒有固定數字」的 — 帶固定數值的
+     （折射 n=1.00/1.50、氫能階 eV 值、加熱曲線溫度、熱機循環軸刻度、衰變圖 N 值、
+     碰撞圖 m=2kg/3kg、質心 2m/5m、共鳴管 L/λ 數值、速率分布倍率、F-x/位能/電場-位置圖軸刻度）
+     一律不收；符號標籤（m₁、R₁、v、θ、公式）可以。 */
   const STICKER_PARTS = [
-    { id: 'p-mech', name: '力學', types: ['block', 'ramp', 'ball', 'pulley', 'movablePulley', 'spring', 'pendulum', 'cart', 'surface', 'rope', 'hangingMass', 'fulcrum', 'lever'] },
-    { id: 'p-wave', name: '波動', types: ['planeWave', 'circularWave', 'sineWave', 'singleSlit', 'doubleSlit', 'barrier', 'pointSource', 'diffraction', 'interference', 'standingWave', 'openPipeStandingWave', 'closedPipeStandingWave', 'longitudinalWave'] },
-    { id: 'p-optics', name: '光學', types: ['ray', 'convexLens', 'concaveLens', 'planeMirror', 'concaveMirror', 'convexMirror', 'screen', 'normalLine', 'prism', 'principalAxis', 'focalMarker', 'opticalObject'] },
-    { id: 'p-em', name: '電磁學', types: ['positiveCharge', 'negativeCharge', 'electricFieldPoint', 'parallelPlateField', 'magneticIntoPage', 'magneticOutPage', 'uniformMagneticField', 'barMagnetField', 'wireMagneticField', 'loopMagneticField', 'solenoidField', 'transformer', 'generator'] },
-    { id: 'p-circuit', name: '電路學', types: ['wire', 'junction', 'cell', 'battery', 'resistorTaiwan', 'variableResistorTaiwan', 'potentiometer3Terminal', 'lamp', 'switchOpen', 'switchClosed', 'ammeter', 'voltmeter', 'galvanometer', 'motor', 'capacitor', 'polarizedCapacitor', 'inductor', 'diode', 'led', 'fuse', 'ground', 'currentArrow', 'acSource'] },
+    { id: 'p-mech', name: '力學', types: ['block', 'ramp', 'ball', 'pulley', 'movablePulley', 'spring', 'pendulum', 'cart', 'surface', 'rope', 'hangingMass', 'fulcrum', 'lever', 'projectilePath', 'circularMotion', 'atwoodMachine', 'springOscillator', 'conicalPendulum', 'torqueDiagram', 'orbitDiagram', 'linkedKinematicsGraph', 'dimensionLine', 'groundLine', 'dashedLine'] },
+    { id: 'p-wave', name: '波動', types: ['planeWave', 'circularWave', 'sineWave', 'singleSlit', 'doubleSlit', 'barrier', 'pointSource', 'diffraction', 'interference', 'standingWave', 'openPipeStandingWave', 'closedPipeStandingWave', 'longitudinalWave', 'doubleSlitExperiment', 'dopplerWavefront', 'singleSlitIntensity', 'doubleSlitIntensity', 'pulseSuperposition'] },
+    { id: 'p-optics', name: '光學', types: ['ray', 'convexLens', 'concaveLens', 'planeMirror', 'concaveMirror', 'convexMirror', 'screen', 'normalLine', 'prism', 'principalAxis', 'focalMarker', 'opticalObject', 'prismDispersion', 'angleArc'] },
+    { id: 'p-em', name: '電磁學', types: ['positiveCharge', 'negativeCharge', 'electricFieldPoint', 'parallelPlateField', 'magneticIntoPage', 'magneticOutPage', 'uniformMagneticField', 'barMagnetField', 'wireMagneticField', 'loopMagneticField', 'solenoidField', 'transformer', 'generator', 'inductionCoil', 'conductorForce', 'chargedParticleMagnetic', 'chargedParticleElectric', 'electricDipoleField', 'likeChargeField', 'equipotentialMap', 'electromagneticWave'] },
+    { id: 'p-circuit', name: '電路學', types: ['wire', 'junction', 'cell', 'battery', 'resistorTaiwan', 'variableResistorTaiwan', 'potentiometer3Terminal', 'lamp', 'switchOpen', 'switchClosed', 'ammeter', 'voltmeter', 'galvanometer', 'motor', 'capacitor', 'polarizedCapacitor', 'inductor', 'diode', 'led', 'fuse', 'ground', 'currentArrow', 'acSource', 'seriesCircuitDiagram', 'parallelCircuitDiagram', 'rcCircuit', 'rlcCircuit', 'meterExperimentCircuit', 'ivCharacteristicGraph'] },
+    { id: 'p-modern', name: '近代物理', types: ['photoelectricApparatus', 'cathodeRayTube', 'massSpectrometer', 'millikanOilDrop', 'rutherfordScattering', 'xrayTube', 'bohrAtom', 'nuclearFission', 'braggDiffraction', 'photoelectricGraph'] },
+    { id: 'p-thermal', name: '熱學', types: ['pistonCylinder', 'pvProcessGraph', 'calorimeter'] },
   ];
   const STICKER_TABS = STICKER_PARTS.map(p => ({ id: p.id, name: p.name }));
   let stickerCat = 'p-mech';
@@ -915,7 +929,22 @@ function fsGuardExit() {
     }
   };
   $('btn-page-prev').onclick = () => { board.gotoPage(board.pageIndex - 1); afterPageChange(); };
-  $('btn-page-next').onclick = () => { board.gotoPage(board.pageIndex + 1); afterPageChange(); };
+  $('btn-page-next').onclick = () => {
+    const before = board.pageIndex;
+    board.gotoPage(board.pageIndex + 1);
+    afterPageChange();
+    if (board.pageIndex === before) return;
+    /* v199（南勛 2026-11-18）：按下一頁不要一次呈現整頁——該頁有段落標記時，
+       只呈現到第一個標記為止（停在第一段），之後再用 ▶▶／播放逐段揭露。
+       沒有標記的頁維持全顯示；上一頁行為不變。 */
+    const stops = TLC._sortedStops();
+    if (!stops.length) return;
+    if (!TLC.active) TLC.activate();
+    TLC.goTo(stops[0].t);
+    renderTlTicks(tlDuration());
+    renderTlStrip();
+    schedulePreview();
+  };
   $('btn-page-add').onclick = () => { board.addPage(); afterPageChange(); toast(window.t('已新增第 {n} 頁', { n: board.pageIndex + 1 })); };
   $('btn-page-del').onclick = () => {
     if (!confirm(window.t('確定刪除第 {n} 頁？', { n: board.pageIndex + 1 }))) return;
