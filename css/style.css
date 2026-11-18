@@ -217,6 +217,17 @@ svg.icn { vertical-align: -5px; }
 }
 #float-undo button:active { transform: scale(.93); }
 body.guest-mode #float-undo { display: none; }
+/* v188：畫布右上角浮動段落鈕（紫底，與頂部標記鈕同色同功能） */
+#float-seg {
+  position: absolute; right: 14px; top: 14px; z-index: 20;
+  display: flex; gap: 10px;
+}
+#float-seg button {
+  width: 60px; height: 60px; font-size: 20px; border-radius: 50%;
+  background: #7048e8; color: #fff; border: 1px solid #5f3dc4;
+  box-shadow: 0 2px 10px rgba(0,0,0,.25); padding: 0; line-height: 1;
+}
+#float-seg button:active { transform: scale(.93); }
 
 #text-overlay {
   position: absolute; z-index: 5; background: #fff; border: 2px solid #1971c2;

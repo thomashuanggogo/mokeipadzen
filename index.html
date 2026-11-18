@@ -134,6 +134,11 @@
         <button id="btn-float-undo" title="復原上一步（或雙指輕觸畫布）">↩️</button>
         <button id="btn-float-redo" title="重做">↪️</button>
       </div>
+      <!-- v188：畫布右上角浮動段落鈕（學長要求）— 跟頂部紫鈕同一組功能，不必捲頂部列 -->
+      <div id="float-seg">
+        <button id="btn-float-prev" title="上一個標記">◀◀</button>
+        <button id="btn-float-next" title="下一個標記（直接跳過去）">▶▶</button>
+      </div>
       <div id="text-overlay" class="hidden">
         <textarea id="text-input" rows="2" placeholder="輸入文字…"></textarea>
         <div class="text-btns">
@@ -252,6 +257,7 @@
       <p style="margin:8px 0"><b>⏭ 跳到最後</b>：播放頭跳到最新進度。<span style="color:#1971c2">藍底</span></p>
       <p style="margin:8px 0"><b>⏪ 上一個標記</b>：跳到上一個 🚩 標記。<span style="color:#7048e8">紫底</span></p>
       <p style="margin:8px 0"><b>⏩ 下一個標記</b>：跳到下一個 🚩 標記。<span style="color:#7048e8">紫底</span></p>
+      <p style="margin:8px 0"><b>右上角紫色浮動鈕</b>：畫布右上角那兩顆，跟頂部的上一個／下一個標記是同一組，頂部列捲不到時按這組。</p>
       <p style="margin:8px 0"><b>◀ 上一筆</b>：播放頭退回上一筆筆跡。<span style="color:#f08c00">橘底</span></p>
       <p style="margin:8px 0"><b>▶ 下一筆</b>：播放頭前進到下一筆筆跡。<span style="color:#f08c00">橘底</span></p>
       <p style="margin:8px 0"><b>▶ 播放</b>：一點就從頭重播，不用展開時間軸；播完自動回書寫。<span style="color:#2b8a3e">綠底</span></p>

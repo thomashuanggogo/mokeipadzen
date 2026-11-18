@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v187';
+const APP_VERSION = 'v188';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -1547,6 +1547,13 @@ function fsGuardExit() {
   };
   /* ▶▶ 下一個標記：直接跳過去（v168：南勛要求——原本單擊是「播放到段落點」、雙擊才瞬間跳，改成單擊直接跳，不再等雙擊） */
   $('btn-tl-next').onclick = () => {
+    if (!ensureTLC()) return;
+    const m = TLC.revealNext();
+    toast(m ? '⏭ 已跳到：' + (m.label || '段落') : '已在即時進度');
+  };
+  /* v188：右上角浮動段落鈕（學長要求）— 與頂部紫鈕完全相同的動作 */
+  $('btn-float-prev').onclick = () => { if (ensureTLC()) TLC.prevStop(); };
+  $('btn-float-next').onclick = () => {
     if (!ensureTLC()) return;
     const m = TLC.revealNext();
     toast(m ? '⏭ 已跳到：' + (m.label || '段落') : '已在即時進度');
