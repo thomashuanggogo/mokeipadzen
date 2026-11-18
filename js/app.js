@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v185';
+const APP_VERSION = 'v187';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -479,11 +479,13 @@ function fsGuardExit() {
   /* ----- v73：底圖調整模式（雙指縮放調大小、單指拖曳移位置） ----- */
   const enterImgAdjust = () => {
     const imgs = board._migrateImages(board.page);
-    if (!imgs.length) { toast('本頁沒有底圖'); return; }
+    // v187：lockBg 頁要扣掉板面底圖，只剩它時沒有可調整的圖
+    if (!board._movableImages(board.page).length) { toast('本頁沒有可調整的圖片'); return; }
     board.imgAdjust = true;
-    // v139：預設選中最上層那張
-    if (!board._imgById(board.page, board.imgSelId)) {
-      board.imgSelId = imgs[imgs.length - 1].id;
+    // v139：預設選中最上層那張（v187：只在可調整的圖裡選）
+    if (!board._movableImages(board.page).some(im => im.id === board.imgSelId)) {
+      const mv = board._movableImages(board.page);
+      board.imgSelId = mv[mv.length - 1].id;
     }
     document.body.classList.add('img-adjusting'); // v137：頂部變色提示調圖中
     $('btn-img-adjust').classList.add('hidden');
@@ -526,16 +528,17 @@ function fsGuardExit() {
     }
   };
   const updateImgAdjustBtn = () => {
-    // 有底圖且不在調整模式時，顯示「調整底圖」按鈕
-    // v139：多圖 — 檢查 images 陣列
-    const show = board._migrateImages(board.page).length > 0 && !board.imgAdjust;
+    // 有可調整的圖且不在調整模式時，顯示「調整底圖」按鈕
+    // v139：多圖 — 檢查 images 陣列；v187：lockBg 頁扣掉板面底圖（只剩底圖時不顯示，避免誤入調整模式拖到整頁板面）
+    const show = board._movableImages(board.page).length > 0 && !board.imgAdjust;
     $('btn-img-adjust').classList.toggle('hidden', !show);
   };
   $('btn-img-adjust').onclick = enterImgAdjust;
 
   /* ----- v185：物理圖庫貼紙（阿偉 aweilab 開放物件庫）— 第二欄「貼紙」區 ----- */
   const stickerLib = window.PhysicsDiagramAssets || null;
-  const STICKER_SKIP = new Set(['text', 'label', 'line', 'arrow', 'point', 'axes']); // 墨課已有工具可畫，不進圖庫
+  const stickerNameByType = new Map();
+  if (stickerLib) for (const cat of stickerLib.categories) for (const a of stickerLib.getAssetsForCategory(cat.id)) stickerNameByType.set(a.type, a.name);
   const stickerThumbCache = new Map();
   function drawStickerCanvas(type, cw, ch) {
     const def = stickerLib.getDefinition(type);
@@ -549,34 +552,80 @@ function fsGuardExit() {
       { paper: 'rgba(255,255,255,0)', ink: '#212529' });
     return c;
   }
-  let stickerCat = 'mechanics';
+  /* v187：面板收斂 — 零件只留精選 39 個（手畫慢或容易歪、樣子固定、常用）；
+     整圖分「我的版本」（南勛在 maker 親調的參數）與「標準版」（圖庫預設參數的常用整圖）兩區；
+     其餘物件不進面板，特別版本走 maker JSON 匯入 */
+  const STICKER_PARTS = [
+    { id: 'p-circuit', name: '電路零件', types: ['junction', 'cell', 'battery', 'resistorTaiwan', 'variableResistorTaiwan', 'potentiometer3Terminal', 'lamp', 'switchOpen', 'switchClosed', 'ammeter', 'voltmeter', 'galvanometer', 'capacitor', 'inductor', 'diode', 'led', 'motor', 'fuse', 'ground', 'currentArrow'] },
+    { id: 'p-mech', name: '力學零件', types: ['pulley', 'movablePulley', 'spring', 'pendulum', 'cart', 'ramp', 'hangingMass', 'lever'] },
+    { id: 'p-optics', name: '光學零件', types: ['convexLens', 'concaveLens', 'planeMirror', 'concaveMirror', 'convexMirror', 'prism', 'screen'] },
+    { id: 'p-em', name: '電磁符號', types: ['positiveCharge', 'negativeCharge', 'magneticIntoPage', 'magneticOutPage'] },
+  ];
+  const stickerPresets = window.MOKE_STICKER_PRESETS || { mine: [], std: [] };
+  const STICKER_TABS = [...STICKER_PARTS.map(p => ({ id: p.id, name: p.name })),
+    { id: 'd-mine', name: '整圖・我的版本' }, { id: 'd-std', name: '整圖・標準版' }];
+  let stickerCat = 'p-circuit';
   function renderStickerTabs() {
     const tabs = $('sticker-tabs');
     tabs.innerHTML = '';
-    for (const cat of stickerLib.categories) {
-      if (!stickerLib.getAssetsForCategory(cat.id).some(a => !STICKER_SKIP.has(a.type))) continue;
+    for (const t of STICKER_TABS) {
       const b = document.createElement('button');
-      b.textContent = cat.name;
-      b.classList.toggle('active', cat.id === stickerCat);
-      b.onclick = () => { stickerCat = cat.id; renderStickerTabs(); renderStickerGrid(); };
+      b.textContent = t.name;
+      b.classList.toggle('active', t.id === stickerCat);
+      b.onclick = () => { stickerCat = t.id; renderStickerTabs(); renderStickerGrid(); };
       tabs.appendChild(b);
     }
   }
+  const diagramThumbCache = new Map();
   function renderStickerGrid() {
     const grid = $('sticker-grid');
     grid.innerHTML = '';
-    for (const a of stickerLib.getAssetsForCategory(stickerCat)) {
-      if (STICKER_SKIP.has(a.type)) continue;
+    const part = STICKER_PARTS.find(p => p.id === stickerCat);
+    if (part) {
+      for (const type of part.types) {
+        const name = stickerNameByType.get(type) || type;
+        const cell = document.createElement('button');
+        cell.className = 'sticker-cell';
+        if (!stickerThumbCache.has(type)) stickerThumbCache.set(type, drawStickerCanvas(type, 192, 144));
+        cell.appendChild(stickerThumbCache.get(type));
+        const nm = document.createElement('span');
+        nm.textContent = name;
+        cell.appendChild(nm);
+        cell.onclick = () => stampSticker(type, name);
+        grid.appendChild(cell);
+      }
+      return;
+    }
+    const list = stickerCat === 'd-mine' ? stickerPresets.mine : stickerPresets.std;
+    for (const preset of list) {
       const cell = document.createElement('button');
       cell.className = 'sticker-cell';
-      if (!stickerThumbCache.has(a.type)) stickerThumbCache.set(a.type, drawStickerCanvas(a.type, 192, 144));
-      cell.appendChild(stickerThumbCache.get(a.type));
+      if (!diagramThumbCache.has(preset.name)) {
+        const r = renderMakerItem(preset.item);
+        diagramThumbCache.set(preset.name, r ? r.dataUrl : '');
+      }
+      const img = document.createElement('img');
+      img.src = diagramThumbCache.get(preset.name);
+      img.alt = preset.name;
+      cell.appendChild(img);
       const nm = document.createElement('span');
-      nm.textContent = a.name;
+      nm.textContent = preset.name;
       cell.appendChild(nm);
-      cell.onclick = () => stampSticker(a.type, a.name);
+      cell.onclick = () => stampDiagram(preset);
       grid.appendChild(cell);
     }
+  }
+  function stampDiagram(preset) {
+    const item = Object.assign({}, preset.item, { x: 600, y: 400 });
+    const r = renderMakerItem(item);
+    if (!r) { toast('這張圖畫不出來'); return; }
+    const im = board.addImage(r.dataUrl);
+    placeMakerImage(im, r, item, { width: 1200, height: 800 });
+    $('modal-stickers').classList.add('hidden');
+    enterImgAdjust();
+    board.imgSelId = im.id;
+    board.render();
+    toast(`已貼上「${preset.name}」：直接拖曳移位置、雙指縮放，調完按「✓ 完成」`, 3500);
   }
   function stampSticker(type, name) {
     const def = stickerLib.getDefinition(type);
@@ -594,14 +643,96 @@ function fsGuardExit() {
     };
     if (!place()) { let n = 0; const iv = setInterval(() => { if (place() || ++n > 40) clearInterval(iv); }, 50); }
     $('modal-stickers').classList.add('hidden');
-    updateImgAdjustBtn();
-    toast(`已貼上「${name}」：按上方「調整底圖」可搬移、縮放`, 3000);
+    // v186：貼上後自動進入調整模式並選中這張貼紙，使用者直接拖曳就能移位置（v185 要先找「調整底圖」鈕，直接拖只會畫出筆跡）
+    enterImgAdjust();
+    board.imgSelId = im.id;
+    board.render();
+    toast(`已貼上「${name}」：直接拖曳移位置、雙指縮放，調完按「✓ 完成」`, 3500);
   }
   $('btn-stickers').onclick = () => {
     if (!stickerLib) { toast('物理圖庫載入失敗'); return; }
     renderStickerTabs();
     renderStickerGrid();
     $('modal-stickers').classList.remove('hidden');
+  };
+  /* ----- v187：匯入 physics-diagram-maker 匯出的 JSON — 照 maker 裡調好的參數／位置／大小貼上 ----- */
+  function renderMakerItem(item) {
+    const def = stickerLib.getDefinition(item.type);
+    if (!def) return null;
+    const w = item.width || def.width, h = item.height || def.height;
+    const sc = item.scale || 1;
+    let params = null;
+    try {
+      const merged = Object.assign({}, stickerLib.getDefaultParams(item.type) || {}, item.params || {});
+      params = stickerLib.sanitizeParams(item.type, merged);
+    } catch (e) { params = item.params || null; }
+    const RES = 2; // 每 maker px 用 2 實體 px 繪製，放大不糊
+    const padM = Math.max(w, h) * sc * 0.4 + 24; // 邊距（maker px）：圖溢出名目框也不被切
+    const cw = Math.ceil((w * sc + padM * 2) * RES), ch = Math.ceil((h * sc + padM * 2) * RES);
+    const c = document.createElement('canvas'); c.width = cw; c.height = ch;
+    const ctx = c.getContext('2d');
+    ctx.scale(RES, RES);
+    const drawItem = { type: item.type, x: cw / RES / 2, y: ch / RES / 2, scale: sc,
+      rotation: item.rotation || 0, flippedX: !!item.flippedX, flippedY: !!item.flippedY,
+      strokeWidth: item.strokeWidth || 2, params };
+    if ('label' in item) drawItem.label = item.label; // maker 有 label 欄位就照他的（空字串＝不顯示預設標籤）
+    stickerLib.draw(ctx, drawItem, { paper: 'rgba(255,255,255,0)', ink: '#212529' });
+    // 裁掉透明邊：抓點框緊貼可見圖形；裁切中心與物件中心的偏移一併量出，放的位置才準
+    const d = ctx.getImageData(0, 0, cw, ch).data;
+    let x0 = cw, y0 = ch, x1 = -1, y1 = -1;
+    for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) {
+      if (d[(y * cw + x) * 4 + 3] > 8) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    }
+    if (x1 < 0) return null;
+    const tw = x1 - x0 + 1, th = y1 - y0 + 1;
+    const tc = document.createElement('canvas'); tc.width = tw; tc.height = th;
+    tc.getContext('2d').drawImage(c, x0, y0, tw, th, 0, 0, tw, th);
+    return { dataUrl: tc.toDataURL('image/png'), pxW: tw, pxH: th,
+      offX: ((x0 + x1 + 1) / 2 - cw / 2) / RES, offY: ((y0 + y1 + 1) / 2 - ch / 2) / RES, RES };
+  }
+  function placeMakerImage(im, r, item, ab) {
+    const kx = board._cssW / ab.width, ky = board._cssH / ab.height;
+    const targetW = (r.pxW / r.RES) * kx; // 裁切後實寬（maker px）換成畫布 px
+    const cx = (item.x + r.offX) * kx, cy = (item.y + r.offY) * ky;
+    const place = () => {
+      const el = im._el;
+      if (!el || !el.naturalWidth) return false;
+      const fit = Math.min(board._cssW / el.naturalWidth, board._cssH / el.naturalHeight);
+      im.s = Math.round((targetW / (el.naturalWidth * fit)) * 1000) / 1000;
+      im.x = Math.round(cx - board._cssW / 2);
+      im.y = Math.round(cy - board._cssH / 2);
+      board.render();
+      return true;
+    };
+    if (!place()) { let n = 0; const iv = setInterval(() => { if (place() || ++n > 40) clearInterval(iv); }, 50); }
+  }
+  function importMakerFile(file) {
+    file.text().then(txt => {
+      let proj = null;
+      try { proj = JSON.parse(txt); } catch (e) { toast('這個檔案不是 JSON'); return; }
+      if (!proj || !Array.isArray(proj.items)) { toast('看不懂這個檔案（不是 maker 匯出的格式）'); return; }
+      const ab = proj.artboard || { width: 1200, height: 800 };
+      let ok = 0, lastIm = null;
+      for (const item of proj.items) {
+        if (!item || !item.type) continue;
+        const r = renderMakerItem(item);
+        if (!r) continue;
+        const im = board.addImage(r.dataUrl);
+        placeMakerImage(im, r, item, ab);
+        ok++; lastIm = im;
+      }
+      if (!ok) { toast('這個檔案裡沒有可用的物件'); return; }
+      $('modal-stickers').classList.add('hidden');
+      enterImgAdjust(); // 同 v186：匯入後直接進調整模式，位置不對馬上拖
+      if (lastIm) board.imgSelId = lastIm.id;
+      board.render();
+      toast(`已照 maker 的設定匯入 ${ok} 張貼紙：直接拖曳移位置，調完按「✓ 完成」`, 3500);
+    }).catch(() => toast('讀不到這個檔案'));
+  }
+  $('btn-maker-import').onclick = () => { if (!stickerLib) { toast('物理圖庫載入失敗'); return; } $('file-maker').click(); };
+  $('file-maker').onchange = e => {
+    for (const f of e.target.files) importMakerFile(f);
+    e.target.value = '';
   };
   // v143：✓ 在裁切模式下＝套用裁切，否則＝離開調整
   $('btn-img-done').onclick = () => {

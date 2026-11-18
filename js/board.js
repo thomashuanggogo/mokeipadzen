@@ -121,11 +121,19 @@ class Board {
     const v = this.view;
     const cx = (sx - v.ox) / v.scale, cy = (sy - v.oy) / v.scale;
     const imgs = this._migrateImages(this.page);
+    // v187：lockBg 頁（轉檔課程）的第一張圖是整頁板面底圖，筆跡釘在它的座標上——調整模式不可選、不可拖，避免整頁移位
+    const skipId = (this.page.lockBg && imgs.length) ? imgs[0].id : null;
     for (let i = imgs.length - 1; i >= 0; i--) {
+      if (imgs[i].id === skipId) continue;
       const b = this._imgBounds(imgs[i]);
       if (b && cx >= b.x0 && cx <= b.x1 && cy >= b.y0 && cy <= b.y1) return imgs[i];
     }
     return null;
+  }
+  /* v187：本頁可調整的圖片（lockBg 頁扣掉板面底圖） */
+  _movableImages(pg) {
+    const imgs = this._migrateImages(pg);
+    return (pg && pg.lockBg && imgs.length) ? imgs.slice(1) : imgs;
   }
   /* v143：進入/離開裁切模式 */
   enterCrop(id) {
@@ -1795,8 +1803,9 @@ class Board {
       }
     }
     // v139：調整模式下，每張圖顯示中心點（選中的高亮）
+    // v187：lockBg 頁的板面底圖不畫中心點（它不可調整，畫了會誤導）
     if (this.imgAdjust && imgs.length) {
-      for (const im of imgs) {
+      for (const im of this._movableImages(pg)) {
         const b = this._imgBounds(im);
         if (!b) continue;
         const isSel = im.id === this.imgSelId;

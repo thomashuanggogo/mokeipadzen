@@ -1,5 +1,5 @@
 /* 墨課 · Service Worker（離線可用） */
-const CACHE = 'moke-v185';
+const CACHE = 'moke-v187';
 const ASSETS = [
   './',
   'index.html',
@@ -8,6 +8,7 @@ const ASSETS = [
   'js/board.js',
   'js/physics-assets.js',
   'js/physics-assets-hs.js',
+  'js/sticker-presets.js',
   'js/share.js',
   'js/lesson.js',
   'js/app.js',
