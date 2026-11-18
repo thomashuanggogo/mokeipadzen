@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v184';
+const APP_VERSION = 'v185';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -532,6 +532,77 @@ function fsGuardExit() {
     $('btn-img-adjust').classList.toggle('hidden', !show);
   };
   $('btn-img-adjust').onclick = enterImgAdjust;
+
+  /* ----- v185：物理圖庫貼紙（阿偉 aweilab 開放物件庫）— 第二欄「貼紙」區 ----- */
+  const stickerLib = window.PhysicsDiagramAssets || null;
+  const STICKER_SKIP = new Set(['text', 'label', 'line', 'arrow', 'point', 'axes']); // 墨課已有工具可畫，不進圖庫
+  const stickerThumbCache = new Map();
+  function drawStickerCanvas(type, cw, ch) {
+    const def = stickerLib.getDefinition(type);
+    const c = document.createElement('canvas');
+    c.width = cw; c.height = ch;
+    const ctx = c.getContext('2d');
+    const s = Math.min((cw - 12) / def.width, (ch - 12) / def.height);
+    let params = null;
+    try { const d = stickerLib.getDefaultParams(type); if (d) params = stickerLib.sanitizeParams(type, d); } catch (e) {}
+    stickerLib.draw(ctx, { type, x: cw / 2, y: ch / 2, scale: s, strokeWidth: 2, label: '', params },
+      { paper: 'rgba(255,255,255,0)', ink: '#212529' });
+    return c;
+  }
+  let stickerCat = 'mechanics';
+  function renderStickerTabs() {
+    const tabs = $('sticker-tabs');
+    tabs.innerHTML = '';
+    for (const cat of stickerLib.categories) {
+      if (!stickerLib.getAssetsForCategory(cat.id).some(a => !STICKER_SKIP.has(a.type))) continue;
+      const b = document.createElement('button');
+      b.textContent = cat.name;
+      b.classList.toggle('active', cat.id === stickerCat);
+      b.onclick = () => { stickerCat = cat.id; renderStickerTabs(); renderStickerGrid(); };
+      tabs.appendChild(b);
+    }
+  }
+  function renderStickerGrid() {
+    const grid = $('sticker-grid');
+    grid.innerHTML = '';
+    for (const a of stickerLib.getAssetsForCategory(stickerCat)) {
+      if (STICKER_SKIP.has(a.type)) continue;
+      const cell = document.createElement('button');
+      cell.className = 'sticker-cell';
+      if (!stickerThumbCache.has(a.type)) stickerThumbCache.set(a.type, drawStickerCanvas(a.type, 192, 144));
+      cell.appendChild(stickerThumbCache.get(a.type));
+      const nm = document.createElement('span');
+      nm.textContent = a.name;
+      cell.appendChild(nm);
+      cell.onclick = () => stampSticker(a.type, a.name);
+      grid.appendChild(cell);
+    }
+  }
+  function stampSticker(type, name) {
+    const def = stickerLib.getDefinition(type);
+    const targetW = Math.min(480, Math.max(190, def.width * 1.35)); // 貼上後的顯示寬度（px）
+    const pxW = Math.round(targetW * 2); // 2 倍像素繪製，放大不糊
+    const c = drawStickerCanvas(type, pxW, Math.round(def.height * (pxW / def.width)));
+    const im = board.addImage(c.toDataURL('image/png'));
+    const place = () => {
+      const el = im._el;
+      if (!el || !el.naturalWidth) return false;
+      const fit = Math.min(board._cssW / el.naturalWidth, board._cssH / el.naturalHeight);
+      im.s = Math.round((targetW / (el.naturalWidth * fit)) * 1000) / 1000;
+      board.render();
+      return true;
+    };
+    if (!place()) { let n = 0; const iv = setInterval(() => { if (place() || ++n > 40) clearInterval(iv); }, 50); }
+    $('modal-stickers').classList.add('hidden');
+    updateImgAdjustBtn();
+    toast(`已貼上「${name}」：按上方「調整底圖」可搬移、縮放`, 3000);
+  }
+  $('btn-stickers').onclick = () => {
+    if (!stickerLib) { toast('物理圖庫載入失敗'); return; }
+    renderStickerTabs();
+    renderStickerGrid();
+    $('modal-stickers').classList.remove('hidden');
+  };
   // v143：✓ 在裁切模式下＝套用裁切，否則＝離開調整
   $('btn-img-done').onclick = () => {
     if (board.cropMode) {

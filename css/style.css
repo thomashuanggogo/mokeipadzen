@@ -398,3 +398,24 @@ body.zen #toolbar .tool-group { flex-direction: column; }
 /* v53：頁數提醒 */
 .page-hint { font-size: 11px; color: #e67700; margin: 0 4px; white-space: nowrap; }
 .page-hint.hidden { display: none; }
+
+/* v185：物理圖庫貼紙面板 */
+.sticker-hint { color: #868e96; font-size: 14px; margin: 0 0 10px; }
+#sticker-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+#sticker-tabs button {
+  border: 1px solid #ced4da; background: #f8f9fa; color: #343a40;
+  border-radius: 999px; padding: 6px 12px; font-size: 14px; cursor: pointer;
+}
+#sticker-tabs button.active { background: #343a40; color: #fff; border-color: #343a40; }
+#sticker-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 8px; max-height: 52dvh; overflow-y: auto; padding: 2px;
+}
+.sticker-cell {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 8px 4px 6px; background: #fff; border: 1px solid #e9ecef;
+  border-radius: 12px; cursor: pointer;
+}
+.sticker-cell:hover { border-color: #adb5bd; }
+.sticker-cell canvas { width: 96px; height: 72px; }
+.sticker-cell span { font-size: 12px; color: #495057; line-height: 1.25; text-align: center; }
