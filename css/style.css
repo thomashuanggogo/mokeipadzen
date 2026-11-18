@@ -189,7 +189,12 @@ body.img-adjusting #topbar { background: #8a4b00; }
 }
 #toolbar .tool-group { display: flex; flex-direction: row; gap: 4px; align-items: center; } /* v112: gap 6→4 */
 .tool-group.row { flex-direction: row; }
-.tool { font-size: 18px; width: 44px; height: 44px; padding: 0; }
+.tool { font-size: 22px; width: 44px; height: 44px; padding: 0; } /* v182：只放大框裡的圖案（18→22），外框 44px 不動（南勛） */
+/* v182：橡皮擦圖案要看起來巨大、直線圖案要粗一點（外框一樣不動） */
+.tool[data-tool="eraser"] { font-size: 31px; }
+.tool[data-tool="line"] { font-size: 27px; }
+/* v182：第一排按鈕裡的圖案也放大（15→18），按鈕高度不變（line-height:1 壓住行高，避免頂列被撐高） */
+#topbar button, #topbar #rec-controls button { font-size: 18px; line-height: 1; }
 .tool.active { background: #d0ebff; border-color: #1971c2; }
 .color { width: 30px; height: 30px; border-radius: 50%; padding: 0; border: 2px solid #adb5bd; }
 .color.active { border-color: #212529; transform: scale(1.15); }
