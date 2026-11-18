@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v196';
+const APP_VERSION = 'v197';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -590,11 +590,43 @@ function fsGuardExit() {
   const stickerNameByType = new Map();
   if (stickerLib) for (const cat of stickerLib.categories) for (const a of stickerLib.getAssetsForCategory(cat.id)) stickerNameByType.set(a.type, a.name);
   const stickerThumbCache = new Map();
+  /* v197：自家重畫的零件 — 南勛點名原版醜的才換，他挑版才上。
+     只影響面板與貼上（drawStickerCanvas）；maker 匯入走 renderMakerItem，不經這裡，照他的參數原樣渲染。
+     座標系跟圖庫定義一致：中心＝物件中心，單位＝定義的 width/height，線寬 2、墨色 #212529。 */
+  const MOKE_PART_OVERRIDES = {
+    // 定滑輪：南勛選 B 版 — 吊環＋雙叉支架抱輪、繩跨輪頂垂兩邊（原版掛架是折線，像彎掉的迴紋針）
+    pulley(ctx) {
+      const r = 26;
+      ctx.beginPath(); ctx.arc(0, -38, 4, 0, Math.PI * 2); ctx.stroke();           // 吊環
+      ctx.beginPath(); ctx.moveTo(0, -34); ctx.lineTo(-13, -22.5); ctx.stroke();   // 支架左叉
+      ctx.beginPath(); ctx.moveTo(0, -34); ctx.lineTo(13, -22.5); ctx.stroke();    // 支架右叉
+      ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();             // 外輪
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.79, 0, Math.PI * 2); ctx.stroke();      // 溝槽
+      ctx.beginPath(); ctx.arc(0, 0, 5, 0, Math.PI * 2); ctx.stroke();             // 輪轂
+      ctx.beginPath(); ctx.arc(0, 0, 1.8, 0, Math.PI * 2); ctx.fill();             // 軸心
+      const rr = r + 3;
+      ctx.beginPath(); ctx.arc(0, 0, rr, Math.PI, Math.PI * 2); ctx.stroke();      // 繩跨輪頂
+      ctx.beginPath(); ctx.moveTo(-rr, 0); ctx.lineTo(-rr, 46); ctx.stroke();      // 左繩
+      ctx.beginPath(); ctx.moveTo(rr, 0); ctx.lineTo(rr, 46); ctx.stroke();        // 右繩
+    },
+  };
   function drawStickerCanvas(type, cw, ch) {
     const def = stickerLib.getDefinition(type);
     const c = document.createElement('canvas');
     c.width = cw; c.height = ch;
     const ctx = c.getContext('2d');
+    const ov = MOKE_PART_OVERRIDES[type];
+    if (ov) {
+      const s = Math.min((cw - 12) / def.width, (ch - 12) / def.height);
+      ctx.save();
+      ctx.translate(cw / 2, ch / 2);
+      ctx.scale(s, s);
+      ctx.strokeStyle = '#212529'; ctx.fillStyle = '#212529';
+      ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ov(ctx);
+      ctx.restore();
+      return c;
+    }
     const s = Math.min((cw - 12) / def.width, (ch - 12) / def.height);
     let params = null;
     try { const d = stickerLib.getDefaultParams(type); if (d) params = stickerLib.sanitizeParams(type, d); } catch (e) {}
