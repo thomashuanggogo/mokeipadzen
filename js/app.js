@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v199';
+const APP_VERSION = 'v200';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -618,6 +618,12 @@ function fsGuardExit() {
       ctx.beginPath(); ctx.arc(vx, vy, 22, 0, a, true); ctx.stroke();
     },
   };
+  /* 南勛在 maker 裡調好的版本（他給 JSON、我把參數收進來）：面板改用他的參數，不用圖庫預設。
+     之後他再給新的 JSON，照樣加進這張表即可。 */
+  const MOKE_PANEL_PARAMS = {
+    // 均勻磁場區：2026-11-18 南勛給的 upload-2.json — 210×150、5 欄×4 列、入紙面
+    uniformMagneticField: { width: 210, height: 150, columns: 5, rows: 4, direction: -1 },
+  };
   function drawStickerCanvas(type, cw, ch) {
     const def = stickerLib.getDefinition(type);
     const c = document.createElement('canvas');
@@ -637,7 +643,11 @@ function fsGuardExit() {
     }
     const s = Math.min((cw - 12) / def.width, (ch - 12) / def.height);
     let params = null;
-    try { const d = stickerLib.getDefaultParams(type); if (d) params = stickerLib.sanitizeParams(type, d); } catch (e) {}
+    try {
+      const mine = MOKE_PANEL_PARAMS[type];
+      const d = mine || stickerLib.getDefaultParams(type);
+      if (d) params = stickerLib.sanitizeParams(type, d);
+    } catch (e) {}
     stickerLib.draw(ctx, { type, x: cw / 2, y: ch / 2, scale: s, strokeWidth: 2, label: '', params },
       { paper: 'rgba(255,255,255,0)', ink: '#212529' });
     return c;
@@ -646,7 +656,7 @@ function fsGuardExit() {
      整圖（成像圖、整套電路、實驗裝置等組好的整張圖）不進面板 — 南勛：「不需要什麼整圖」；
      特別版本（指定的力、角度、數據）走 maker JSON 匯入，一樣變成圖形物件。
      電阻只收台灣高中畫法（IEC 矩形版不收，免得學生混淆）。 */
-  /* v198：七分類。南勛規則（2026-11-18）：場景圖只收「沒有固定數字」的 — 帶固定數值的
+  /* v198：分類（v200 起五分類，南勛指示拿掉熱學、近代物理兩整類與電磁波、交流發電機）。南勛規則（2026-11-18）：場景圖只收「沒有固定數字」的 — 帶固定數值的
      （折射 n=1.00/1.50、氫能階 eV 值、加熱曲線溫度、熱機循環軸刻度、衰變圖 N 值、
      碰撞圖 m=2kg/3kg、質心 2m/5m、共鳴管 L/λ 數值、速率分布倍率、F-x/位能/電場-位置圖軸刻度）
      一律不收；符號標籤（m₁、R₁、v、θ、公式）可以。 */
@@ -654,10 +664,8 @@ function fsGuardExit() {
     { id: 'p-mech', name: '力學', types: ['block', 'ramp', 'ball', 'pulley', 'movablePulley', 'spring', 'pendulum', 'cart', 'surface', 'rope', 'hangingMass', 'fulcrum', 'lever', 'projectilePath', 'circularMotion', 'atwoodMachine', 'springOscillator', 'conicalPendulum', 'torqueDiagram', 'orbitDiagram', 'linkedKinematicsGraph', 'dimensionLine', 'groundLine', 'dashedLine'] },
     { id: 'p-wave', name: '波動', types: ['planeWave', 'circularWave', 'sineWave', 'singleSlit', 'doubleSlit', 'barrier', 'pointSource', 'diffraction', 'interference', 'standingWave', 'openPipeStandingWave', 'closedPipeStandingWave', 'longitudinalWave', 'doubleSlitExperiment', 'dopplerWavefront', 'singleSlitIntensity', 'doubleSlitIntensity', 'pulseSuperposition'] },
     { id: 'p-optics', name: '光學', types: ['ray', 'convexLens', 'concaveLens', 'planeMirror', 'concaveMirror', 'convexMirror', 'screen', 'normalLine', 'prism', 'principalAxis', 'focalMarker', 'opticalObject', 'prismDispersion', 'angleArc'] },
-    { id: 'p-em', name: '電磁學', types: ['positiveCharge', 'negativeCharge', 'electricFieldPoint', 'parallelPlateField', 'magneticIntoPage', 'magneticOutPage', 'uniformMagneticField', 'barMagnetField', 'wireMagneticField', 'loopMagneticField', 'solenoidField', 'transformer', 'generator', 'inductionCoil', 'conductorForce', 'chargedParticleMagnetic', 'chargedParticleElectric', 'electricDipoleField', 'likeChargeField', 'equipotentialMap', 'electromagneticWave'] },
+    { id: 'p-em', name: '電磁學', types: ['positiveCharge', 'negativeCharge', 'electricFieldPoint', 'parallelPlateField', 'magneticIntoPage', 'magneticOutPage', 'uniformMagneticField', 'barMagnetField', 'wireMagneticField', 'solenoidField', 'transformer', 'inductionCoil', 'conductorForce', 'chargedParticleMagnetic', 'chargedParticleElectric', 'electricDipoleField', 'likeChargeField', 'equipotentialMap'] },
     { id: 'p-circuit', name: '電路學', types: ['wire', 'junction', 'cell', 'battery', 'resistorTaiwan', 'variableResistorTaiwan', 'potentiometer3Terminal', 'lamp', 'switchOpen', 'switchClosed', 'ammeter', 'voltmeter', 'galvanometer', 'motor', 'capacitor', 'polarizedCapacitor', 'inductor', 'diode', 'led', 'fuse', 'ground', 'currentArrow', 'acSource', 'seriesCircuitDiagram', 'parallelCircuitDiagram', 'rcCircuit', 'rlcCircuit', 'meterExperimentCircuit', 'ivCharacteristicGraph'] },
-    { id: 'p-modern', name: '近代物理', types: ['photoelectricApparatus', 'cathodeRayTube', 'massSpectrometer', 'millikanOilDrop', 'rutherfordScattering', 'xrayTube', 'bohrAtom', 'nuclearFission', 'braggDiffraction', 'photoelectricGraph'] },
-    { id: 'p-thermal', name: '熱學', types: ['pistonCylinder', 'pvProcessGraph', 'calorimeter'] },
   ];
   const STICKER_TABS = STICKER_PARTS.map(p => ({ id: p.id, name: p.name }));
   let stickerCat = 'p-mech';
@@ -775,11 +783,8 @@ function fsGuardExit() {
       toast(window.t('已照 maker 的設定匯入 {ok} 張貼紙：拖中心把手移位置、第二排 ✕ 刪除', { ok: placed.length }), 3500);
     }).catch(() => toast('讀不到這個檔案'));
   }
-  $('btn-maker-import').onclick = () => { if (!stickerLib) { toast('物理圖庫載入失敗'); return; } $('file-maker').click(); };
-  $('file-maker').onchange = e => {
-    for (const f of e.target.files) importMakerFile(f);
-    e.target.value = '';
-  };
+  /* v200（南勛 2026-11-18）：面板上的「匯入 maker 匯出的 JSON」按鈕拿掉。
+     importMakerFile 函數保留在上方（無 UI 入口），日後要恢復只需把按鈕加回來。 */
   // v143：✓ 在裁切模式下＝套用裁切，否則＝離開調整
   $('btn-img-done').onclick = () => {
     if (board.cropMode) {
