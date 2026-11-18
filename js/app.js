@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v189';
+const APP_VERSION = 'v190';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -468,6 +468,32 @@ function fsGuardExit() {
   /* ----- v107：套索選取旋轉按鈕 ----- */
   $('btn-rotate-left').onclick = () => board.rotateSelection(-15);
   $('btn-rotate-right').onclick = () => board.rotateSelection(15);
+  /* v190：選取後直接刪（南勛要求）— 刪除流程與時間軸編輯刪筆完全一致（事件/標記連帶、刪後補位） */
+  function deleteLassoSelection() {
+    const sel = board._lassoSel;
+    if (!sel || !sel.length) return;
+    const pg = board.page;
+    const sids = new Set(sel.map(s => s.id));
+    const removedStrokes = pg.strokes.filter(s => sids.has(s.id));
+    if (!removedStrokes.length) { board._lassoSel = null; window._mokeUpdateRotateBtns(); return; }
+    pg.strokes = pg.strokes.filter(s => !sids.has(s.id));
+    pg.undo = pg.undo.filter(s => !sids.has(s.id));
+    pg.redo = pg.redo.filter(s => !sids.has(s.id));
+    if (pg.tl) {
+      pg.tl.events = pg.tl.events.filter(e => !(e.evt === 'add' && e.data && e.data.stroke && sids.has(e.data.stroke.id)));
+      pg.tl.stops = pg.tl.stops.filter(m => !sids.has(m.strokeId));
+      TLC.renumberStops();
+    }
+    board._lassoSel = null;
+    window._mokeUpdateRotateBtns();
+    board.rippleCompact(removedStrokes);
+    board.render();
+    TLC.goTo(Math.min(TLC.playhead, TLC.liveEdge()));
+    renderTlTicks(tlDuration());
+    renderTlStrip();
+    toast(window.t('🗑️ 已刪除 {n} 則筆跡', { n: removedStrokes.length }));
+  }
+  $('btn-sel-delete').onclick = deleteLassoSelection;
   window._mokeUpdateRotateBtns = () => {
     const sel = board._lassoSel;
     // v142：直線/箭頭不需要旋轉——單選線條時隱藏旋轉鈕
@@ -475,6 +501,8 @@ function fsGuardExit() {
     const show = !!(sel && sel.length) && !isLine;
     $('btn-rotate-left').classList.toggle('hidden', !show);
     $('btn-rotate-right').classList.toggle('hidden', !show);
+    // v190：刪除鈕只要有選取就顯示（直線/箭頭也能刪）
+    $('btn-sel-delete').classList.toggle('hidden', !(sel && sel.length));
   };
   window._mokeToast = toast; // v131：供 board.js 顯示提示
   /* ----- v73：底圖調整模式（雙指縮放調大小、單指拖曳移位置） ----- */
