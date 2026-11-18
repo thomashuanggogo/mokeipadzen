@@ -1,10 +1,11 @@
 /* 墨課 · Service Worker（離線可用） */
-const CACHE = 'moke-v188';
+const CACHE = 'moke-v189';
 const ASSETS = [
   './',
   'index.html',
   'manifest.json',
   'css/style.css',
+  'js/i18n.js',
   'js/board.js',
   'js/physics-assets.js',
   'js/physics-assets-hs.js',

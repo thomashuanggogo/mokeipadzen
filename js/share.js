@@ -29,7 +29,7 @@ const Share = {
   },
   _peerReady() {
     if (typeof Peer === 'undefined') {
-      alert('分享功能載入失敗（PeerJS），請檢查網路後重整頁面。');
+      alert(window.t ? window.t('分享功能載入失敗（PeerJS），請檢查網路後重整頁面。') : '分享功能載入失敗（PeerJS），請檢查網路後重整頁面。');
       return false;
     }
     return true;

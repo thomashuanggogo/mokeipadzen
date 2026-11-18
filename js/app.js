@@ -2,11 +2,12 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v188';
+const APP_VERSION = 'v189';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
 function toast(msg, ms) {
+  if (window.MokeI18n) msg = window.MokeI18n.t(msg); // v189：雙語 — 純字面訊息在這裡統一翻譯；帶變數的在呼叫端用 t() 組好
   const t = $('toast');
   t.textContent = msg;
   t.classList.remove('hidden');
@@ -92,7 +93,7 @@ function fsGuardExit() {
   // v151：自訂色（色票盤最後一格彩虹格，點開系統選色器，任意顏色）
   const customLabel = document.createElement('label');
   customLabel.className = 'color custom';
-  customLabel.title = '自訂顏色';
+  customLabel.title = window.t('自訂顏色');
   const customInput = document.createElement('input');
   customInput.type = 'color';
   customInput.value = '#e03131';
@@ -141,9 +142,9 @@ function fsGuardExit() {
     if (!axesBtn) return;
     const bl = board.axesOrigin === 'bl';
     axesBtn.innerHTML = bl ? AXES_ICON_BL : AXES_ICON_CENTER;
-    axesBtn.title = bl
+    axesBtn.title = window.t(bl
       ? '座標軸：原點在左下角（再點一次按鈕＝原點改回中央）'
-      : '座標軸：原點在中央（再點一次按鈕＝原點改到左下角）';
+      : '座標軸：原點在中央（再點一次按鈕＝原點改到左下角）');
   };
   function toggleAxesOrigin() {
     board.axesOrigin = board.axesOrigin === 'bl' ? 'center' : 'bl';
@@ -422,7 +423,7 @@ function fsGuardExit() {
       board.setColor('#ffffff');
       colorBox.querySelectorAll('.color').forEach(x => x.classList.toggle('active', x.title === '#ffffff'));
     }
-    toast('背景：' + BG_NAMES[next]);
+    toast(window.t('背景：{name}', { name: window.t(BG_NAMES[next]) }));
   };
   $('btn-image').onclick = () => $('file-image').click();
   $('file-image').onchange = e => {
@@ -625,7 +626,7 @@ function fsGuardExit() {
     enterImgAdjust();
     board.imgSelId = im.id;
     board.render();
-    toast(`已貼上「${preset.name}」：直接拖曳移位置、雙指縮放，調完按「✓ 完成」`, 3500);
+    toast(window.t('已貼上「{name}」：直接拖曳移位置、雙指縮放，調完按「✓ 完成」', { name: window.t(preset.name) }), 3500);
   }
   function stampSticker(type, name) {
     const def = stickerLib.getDefinition(type);
@@ -647,7 +648,7 @@ function fsGuardExit() {
     enterImgAdjust();
     board.imgSelId = im.id;
     board.render();
-    toast(`已貼上「${name}」：直接拖曳移位置、雙指縮放，調完按「✓ 完成」`, 3500);
+    toast(window.t('已貼上「{name}」：直接拖曳移位置、雙指縮放，調完按「✓ 完成」', { name: window.t(name) }), 3500);
   }
   $('btn-stickers').onclick = () => {
     if (!stickerLib) { toast('物理圖庫載入失敗'); return; }
@@ -726,7 +727,7 @@ function fsGuardExit() {
       enterImgAdjust(); // 同 v186：匯入後直接進調整模式，位置不對馬上拖
       if (lastIm) board.imgSelId = lastIm.id;
       board.render();
-      toast(`已照 maker 的設定匯入 ${ok} 張貼紙：直接拖曳移位置，調完按「✓ 完成」`, 3500);
+      toast(window.t('已照 maker 的設定匯入 {ok} 張貼紙：直接拖曳移位置，調完按「✓ 完成」', { ok }), 3500);
     }).catch(() => toast('讀不到這個檔案'));
   }
   $('btn-maker-import').onclick = () => { if (!stickerLib) { toast('物理圖庫載入失敗'); return; } $('file-maker').click(); };
@@ -782,7 +783,7 @@ function fsGuardExit() {
     const b = $('btn-finger');
     b.textContent = board.fingerDraw ? '✋' : '✋🚫';
     b.classList.toggle('active', board.fingerDraw);
-    b.title = board.fingerDraw ? '手指寫字：開（點一下只留 Apple Pencil，防手掌誤觸）' : '手指寫字：關（只有 Apple Pencil 能寫，點一下開啟）';
+    b.title = window.t(board.fingerDraw ? '手指寫字：開（點一下只留 Apple Pencil，防手掌誤觸）' : '手指寫字：關（只有 Apple Pencil 能寫，點一下開啟）');
   };
   $('btn-finger').onclick = () => {
     board.fingerDraw = !board.fingerDraw;
@@ -843,9 +844,9 @@ function fsGuardExit() {
     const b = $('btn-autoshape');
     b.classList.toggle('active', board.autoShape);
     b.style.opacity = board.autoShape ? '1' : '0.35';
-    b.title = board.autoShape
+    b.title = window.t(board.autoShape
       ? '圖形辨識：開（畫圓/直線後停頓 0.6 秒自動變乾淨圖形，點一下關閉）'
-      : '圖形辨識：關（點一下開啟）';
+      : '圖形辨識：關（點一下開啟）');
   };
   $('btn-autoshape').onclick = () => {
     board.autoShape = !board.autoShape;
@@ -884,9 +885,9 @@ function fsGuardExit() {
   };
   $('btn-page-prev').onclick = () => { board.gotoPage(board.pageIndex - 1); afterPageChange(); };
   $('btn-page-next').onclick = () => { board.gotoPage(board.pageIndex + 1); afterPageChange(); };
-  $('btn-page-add').onclick = () => { board.addPage(); afterPageChange(); toast('已新增第 ' + (board.pageIndex + 1) + ' 頁'); };
+  $('btn-page-add').onclick = () => { board.addPage(); afterPageChange(); toast(window.t('已新增第 {n} 頁', { n: board.pageIndex + 1 })); };
   $('btn-page-del').onclick = () => {
-    if (!confirm('確定刪除第 ' + (board.pageIndex + 1) + ' 頁？')) return;
+    if (!confirm(window.t('確定刪除第 {n} 頁？', { n: board.pageIndex + 1 }))) return;
     board.delPage(); afterPageChange();
   };
 
@@ -929,8 +930,8 @@ function fsGuardExit() {
       const strokes = board.page.strokes;
       const st = strokes.find(s => s.id === m.strokeId);
       const t = st ? (st.tlT === undefined ? 0 : st.tlT) : 0;
-      if (m.removed) toast('🚩 已移除標記（' + fmtTime(t) + '）');
-      else toast('🚩 已標記：' + m.label + '（' + fmtTime(t) + '）');
+      if (m.removed) toast(window.t('🚩 已移除標記（{time}）', { time: fmtTime(t) }));
+      else toast(window.t('🚩 已標記：{label}（{time}）', { label: window.t(m.label), time: fmtTime(t) }));
       if (TLC.active) { renderTlTicks(tlDuration()); renderTlStrip(); TLC._ui(); }
       schedulePreview();
     } else {
@@ -1016,9 +1017,9 @@ function fsGuardExit() {
       loadLessonToBoard(l);
       await LessonStore.save(l);
       refreshLessonList();
-      toast('⬆️ 已匯入：' + (l.title || '課程'));
+      toast(window.t('⬆️ 已匯入：{title}', { title: l.title || window.t('課程') }));
     } catch (err) {
-      toast('匯入失敗：' + err.message);
+      toast(window.t('匯入失敗：{msg}', { msg: err.message }));
     }
     e.target.value = '';
   };
@@ -1033,7 +1034,7 @@ function fsGuardExit() {
       board.render();
       if (blob) {
         downloadBlob(blob, 'moke-page' + (board.pageIndex + 1) + '-' + Date.now() + '.png');
-        toast('📷 已存成圖片（第 ' + (board.pageIndex + 1) + ' 頁）');
+        toast(window.t('📷 已存成圖片（第 {n} 頁）', { n: board.pageIndex + 1 }));
       } else {
         toast('圖片匯出失敗');
       }
@@ -1061,9 +1062,9 @@ function fsGuardExit() {
         pdf.addImage(imgData, 'JPEG', 0, 0, W, H);
       }
       pdf.save('moke-' + Date.now() + '.pdf');
-      toast('📄 PDF 已匯出（共 ' + board.pages.length + ' 頁）');
+      toast(window.t('📄 PDF 已匯出（共 {n} 頁）', { n: board.pages.length }));
     } catch (err) {
-      toast('PDF 匯出失敗：' + err.message);
+      toast(window.t('PDF 匯出失敗：{msg}', { msg: err.message }));
     }
     board.pageIndex = savedIndex;
     board.tlCutoff = savedCutoff;
@@ -1270,7 +1271,7 @@ function fsGuardExit() {
       if (e.key === 'PageDown' || e.key === 'ArrowRight') {
         e.preventDefault(); leaveMarkerState();
         const m = player.nextStop();
-        if (m) toast('⏭ 播放到：' + (m.label || '段落'));
+        if (m) toast(window.t('⏭ 播放到：{label}', { label: window.t(m.label || '段落') }));
       } else if (e.key === 'PageUp' || e.key === 'ArrowLeft') {
         e.preventDefault(); leaveMarkerState(); player.prevStop();
       } else if (e.key === ' ') {
@@ -1319,7 +1320,7 @@ function fsGuardExit() {
       },
       onState: playing => { $('btn-play-toggle').textContent = playing ? '⏸ 暫停' : '▶ 播放'; },
       onMarker: m => {
-        toast('📍 ' + (m && m.label || '段落') + ' — 已暫停，可臨時塗鴉');
+        toast(window.t('📍 {label} — 已暫停，可臨時塗鴉', { label: window.t((m && m.label) || '段落') }));
         overlay.show();
       },
       onEnd: () => {
@@ -1347,7 +1348,7 @@ function fsGuardExit() {
     playNextTimer = setTimeout(() => {
       leaveMarkerState();
       const m = player.nextStop();
-      if (m) toast('⏭ 播放到：' + (m.label || '段落'));
+      if (m) toast(window.t('⏭ 播放到：{label}', { label: window.t(m.label || '段落') }));
       else toast('已是最後一段');
     }, 280);
   };
@@ -1356,7 +1357,7 @@ function fsGuardExit() {
     clearTimeout(playNextTimer);
     leaveMarkerState();
     const m = player.revealNext();
-    toast(m ? '⚡ 瞬間呈現：' + (m.label || '段落') : '已是最後一段');
+    toast(m ? window.t('⚡ 瞬間呈現：{label}', { label: window.t(m.label || '段落') }) : '已是最後一段');
   };
   $('modal-player').addEventListener('click', e => {
     if (e.target.id === 'modal-player') closePlayer();
@@ -1398,7 +1399,7 @@ function fsGuardExit() {
       schedulePreview();
     },
     onPlayState: playing => { $('btn-tl-play').textContent = playing ? '❚❚' : '▶'; $('tl-time').classList.toggle('playing', playing); }, // v112：碼表同步播放狀態
-    onMarker: m => { toast('📍 ' + (m && m.label || '段落')); },
+    onMarker: m => { toast(window.t('📍 {label}', { label: window.t((m && m.label) || '段落') })); },
     onEdit: () => {
       renderTlTicks(tlDuration());
       renderTlStrip();
@@ -1549,14 +1550,14 @@ function fsGuardExit() {
   $('btn-tl-next').onclick = () => {
     if (!ensureTLC()) return;
     const m = TLC.revealNext();
-    toast(m ? '⏭ 已跳到：' + (m.label || '段落') : '已在即時進度');
+    toast(m ? window.t('⏭ 已跳到：{label}', { label: window.t(m.label || '段落') }) : '已在即時進度');
   };
   /* v188：右上角浮動段落鈕（學長要求）— 與頂部紫鈕完全相同的動作 */
   $('btn-float-prev').onclick = () => { if (ensureTLC()) TLC.prevStop(); };
   $('btn-float-next').onclick = () => {
     if (!ensureTLC()) return;
     const m = TLC.revealNext();
-    toast(m ? '⏭ 已跳到：' + (m.label || '段落') : '已在即時進度');
+    toast(m ? window.t('⏭ 已跳到：{label}', { label: window.t(m.label || '段落') }) : '已在即時進度');
   };
   $('tl-seek').onpointerdown = () => { tlSeekDrag = true; };
   // v30：seek 值是該頁相對時間，轉回 session 時間再 goTo
@@ -1649,7 +1650,7 @@ function fsGuardExit() {
       if (x < -0.5 || x > 100.5) continue;
       const d = document.createElement('div');
       d.className = 'tl-tick';
-      d.title = m.label || '標記';
+      d.title = window.t(m.label || '標記');
       d.style.left = (Math.max(0, Math.min(100, x))).toFixed(2) + '%';
       box.appendChild(d);
     }
@@ -1799,11 +1800,11 @@ function fsGuardExit() {
     renderTlStrip();
     const btn = $('btn-tl-del-stroke');
     btn.classList.toggle('hidden', tlEditSelIds.size === 0);
-    btn.textContent = `🗑️ 刪除所選筆跡 (${tlEditSelIds.size})`;
+    btn.textContent = window.t('🗑️ 刪除所選筆跡 ({n})', { n: tlEditSelIds.size });
   }
   function deleteTlStroke() {
     if (!tlEditSelIds.size) return;
-    if (!confirm(`確定刪除所選的 ${tlEditSelIds.size} 則筆跡？`)) return;
+    if (!confirm(window.t('確定刪除所選的 {n} 則筆跡？', { n: tlEditSelIds.size }))) return;
     TLC.pause();
     const pg = board.page;
     const sids = new Set(tlEditSelIds);
@@ -1907,7 +1908,7 @@ function fsGuardExit() {
     TLC.renumberStops();
     renderTlTicks(dur);
     renderTlStrip();
-    toast('🚩 已補標記：' + m.label);
+    toast(window.t('🚩 已補標記：{label}', { label: window.t(m.label) }));
   });
 
   /* ----- 匯出影片 ----- */
@@ -1975,7 +1976,7 @@ function fsGuardExit() {
   if (verEl) {
     verEl.textContent = APP_VERSION;
     // v75：點版本號＝檢查更新（Safari 不主動更新 SW，手動觸發）
-    verEl.title = '點我檢查更新';
+    verEl.title = window.t('點我檢查更新');
     verEl.style.cursor = 'pointer';
     verEl.onclick = async (e) => {
       e.stopPropagation();  // v81：避免觸發 brand 的說明 modal
@@ -1990,13 +1991,14 @@ function fsGuardExit() {
           toast('已檢查更新，若有新版請重整頁面', 2500);
         }, 1500);
       } catch (err) {
-        toast('檢查更新失敗：' + (err.message || err));
+        toast(window.t('檢查更新失敗：{msg}', { msg: err.message || err }));
       }
     };
   }
   // v170：說明與更新做成看得見的按鈕（原本分別藏在 logo 與版本號的點擊裡，新使用者找不到）
   const helpBtn = $('btn-help'); if (helpBtn) helpBtn.onclick = () => openModal('modal-help');
   const updBtn = $('btn-update'); if (updBtn && verEl) updBtn.onclick = () => verEl.click();
+  const langBtn = $('btn-lang'); if (langBtn && window.MokeI18n) langBtn.onclick = () => MokeI18n.setLang(MokeI18n.lang === 'en' ? 'zh' : 'en');
 
   updatePageLabel();
   board.render();
