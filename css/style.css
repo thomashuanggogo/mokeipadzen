@@ -228,6 +228,8 @@ body.guest-mode #float-undo { display: none; }
   box-shadow: 0 2px 10px rgba(0,0,0,.25); padding: 0; line-height: 1;
 }
 #float-seg button:active { transform: scale(.93); }
+/* v194：第二排工具列的選取刪除鈕（套索旁，選取時出現）— 紅色 ✕，與刪頁的回收桶符號區分 */
+#btn-sel-delete { color: #e03131; font-weight: 700; font-size: 22px; }
 
 #text-overlay {
   position: absolute; z-index: 5; background: #fff; border: 2px solid #1971c2;

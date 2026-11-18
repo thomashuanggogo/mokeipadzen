@@ -42,7 +42,7 @@
       <span id="page-hint" class="page-hint" title="頁數太多 iPad 會變慢，建議每堂課不超過 20 頁">💡≤20頁</span>
       <button id="btn-page-next" title="下一頁">▶</button>
       <button id="btn-page-add" title="新增頁面">＋</button>
-      <button id="btn-page-del" title="刪除本頁">🗑️</button>
+      <button id="btn-page-del" title="刪除本頁">🗑️ <span class="btn-label">刪頁</span></button>
       <button id="btn-bg" title="切換背景">🎨 <span class="btn-label">背景</span></button>
       <button id="btn-image" title="插入圖片為底圖">🖼️ <span class="btn-label">圖片</span></button>
       <button id="btn-img-adjust" title="調整底圖大小/位置" class="hidden">🔧 <span class="btn-label">調整底圖</span></button>
@@ -54,7 +54,6 @@
       <button id="btn-img-done" title="完成底圖調整" class="hidden primary">✅ <span class="btn-label">完成</span></button>
       <button id="btn-rotate-left" title="逆時針旋轉選取（15°）" class="hidden">⟲</button>
       <button id="btn-rotate-right" title="順時針旋轉選取（15°）" class="hidden">⟳</button>
-      <button id="btn-sel-delete" title="刪除選取的筆跡" class="hidden">🗑️</button>
       <button id="btn-finger" title="手指寫字開關（預設關：只有 Apple Pencil 能寫，防手掌誤觸）">✋</button>
       <button id="btn-lift" title="手指落點補正量（手指寫字時墨往上移的距離，依自己的手指大小調整）">🎯</button>
       <button id="btn-autoshape" title="圖形自動辨識（預設開）：畫圓/直線後停頓 0.6 秒自動變乾淨圖形">⭕</button>
@@ -103,6 +102,8 @@
         <button data-tool="highlighter" class="tool" title="螢光筆">🖍️</button>
         <button data-tool="eraser" class="tool" title="橡皮擦"><svg width="34" height="34" viewBox="0 0 48 48" aria-hidden="true"><rect x="7" y="15" width="34" height="18" rx="4" fill="#ffa8c5"/><rect x="7" y="15" width="15" height="18" rx="4" fill="#e7f5ff"/><rect x="19" y="15" width="3" height="18" fill="#ced4da"/></svg></button>
         <button data-tool="lasso" class="tool" title="套索（選取）：點一下圖形/筆跡選一個、畫圈選多個；選中後中心把手拖曳移動、角落圓箭頭拖曳旋轉"><svg width="26" height="26" viewBox="0 0 48 48" aria-hidden="true"><rect x="8" y="11" width="32" height="26" rx="5" fill="none" stroke="#495057" stroke-width="3.6" stroke-dasharray="7 5.5"/></svg></button>
+        <!-- v194：選取刪除鈕放第二排工具列、套索旁邊（選取時才出現，紅色 ✕ 與刪頁回收桶區分） -->
+        <button id="btn-sel-delete" class="tool hidden" title="刪除選取的筆跡">✕</button>
         <button data-tool="line" class="tool" title="直線">➖</button>
         <button data-tool="arrow" class="tool" title="箭頭">➡️</button>
         <button data-tool="rect" class="tool" title="矩形">⬜</button>
@@ -308,7 +309,7 @@
 <p style="margin:18px 0 6px;padding:4px 10px;background:#e8f1fa;color:#1971c2;font-weight:700;border-radius:6px;font-size:14px">工具列</p>
       <p style="margin:8px 0"><b>✋ 手抓</b>：點住文字、圖形、筆跡，直接拖曳移動，不用先選取。</p>
       <p style="margin:8px 0"><b><svg class="icn" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><rect x="8" y="11" width="32" height="26" rx="5" fill="none" stroke="#495057" stroke-width="3.6" stroke-dasharray="7 5.5"/></svg> 套索</b>：點一下＝選一個；畫圈＝選多個。<br>按住中心把手拖曳＝移動；按住角落圓箭頭拖曳＝旋轉。<br>在其他地方下筆＝確定（選取消失）。</p>
-      <p style="margin:8px 0"><b>🗑️ 刪除選取</b>：選好筆跡後，頂部會出現垃圾桶鈕，按下去直接刪掉選中的筆跡（後面的筆自動往前補位）。</p>
+      <p style="margin:8px 0"><b>✕ 刪除選取</b>：選好筆跡後，第二排工具列的套索旁邊會出現紅色 ✕ 刪除鈕，按下去直接刪掉選中的筆跡（後面的筆自動往前補位）。</p>
       <p style="margin:8px 0"><b>🎨 顏色</b>：16 色＋自訂色（彩虹格），點顏色就換。</p>
       <p style="margin:8px 0"><b>━ 粗細</b>：顏色盤下方的滑桿，拖曳調整筆跡粗細；右邊的數字就是目前粗細。畫筆和螢光筆各自記住自己的數字。</p>
       <p style="margin:8px 0"><b>✏️ 畫筆</b>：一般書寫，App 打開的預設工具。</p>

@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v190';
+const APP_VERSION = 'v194';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -493,7 +493,7 @@ function fsGuardExit() {
     renderTlStrip();
     toast(window.t('🗑️ 已刪除 {n} 則筆跡', { n: removedStrokes.length }));
   }
-  $('btn-sel-delete').onclick = deleteLassoSelection;
+  $('btn-sel-delete').onclick = deleteLassoSelection; // v194：第二排工具列・套索旁的紅色 ✕（選取時出現）
   window._mokeUpdateRotateBtns = () => {
     const sel = board._lassoSel;
     // v142：直線/箭頭不需要旋轉——單選線條時隱藏旋轉鈕
@@ -501,7 +501,7 @@ function fsGuardExit() {
     const show = !!(sel && sel.length) && !isLine;
     $('btn-rotate-left').classList.toggle('hidden', !show);
     $('btn-rotate-right').classList.toggle('hidden', !show);
-    // v190：刪除鈕只要有選取就顯示（直線/箭頭也能刪）
+    // v194：第二排工具列的選取刪除鈕——有選取就顯示（直線/箭頭也能刪）
     $('btn-sel-delete').classList.toggle('hidden', !(sel && sel.length));
   };
   window._mokeToast = toast; // v131：供 board.js 顯示提示

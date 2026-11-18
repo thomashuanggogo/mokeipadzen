@@ -507,9 +507,10 @@
     '分享功能載入失敗（PeerJS），請檢查網路後重整頁面。': 'Sharing failed to load (PeerJS) — check the network and reload the page.',
     '顯示目前／總時間；點一下＝播放／暫停': 'Current / total time; tap = play / pause',
     '：': ': ',
+    '刪頁': 'Del Page',
     '刪除選取的筆跡': 'Delete the selected strokes',
-    '🗑️ 刪除選取': '🗑️ Delete Selection',
-    '：選好筆跡後，頂部會出現垃圾桶鈕，按下去直接刪掉選中的筆跡（後面的筆自動往前補位）。': ': After selecting strokes, a trash button appears at the top — tap it to delete the selected strokes directly (later strokes shift forward to fill the gap).',
+    '✕ 刪除選取': '✕ Delete Selection',
+    '：選好筆跡後，第二排工具列的套索旁邊會出現紅色 ✕ 刪除鈕，按下去直接刪掉選中的筆跡（後面的筆自動往前補位）。': ': After selecting strokes, a red ✕ delete button appears next to the lasso in the second toolbar row — tap it to delete the selected strokes directly (later strokes shift forward to fill the gap).',
     '🗑️ 已刪除 {n} 則筆跡': '🗑️ Deleted {n} stroke(s)',
     'EN 語言': 'EN Language',
     '：上方「EN」按鈕切換英文介面；再按「中文」切回來。預設繁體中文，選擇會記住。': ': The "EN" button at the top switches to the English interface; tap "中文" to switch back. Traditional Chinese is the default, and your choice is remembered.'
