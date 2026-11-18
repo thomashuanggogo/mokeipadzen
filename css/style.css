@@ -195,6 +195,9 @@ body.img-adjusting #topbar { background: #8a4b00; }
 .tool[data-tool="line"] { font-size: 27px; }
 /* v182：第一排按鈕裡的圖案也放大（15→18），按鈕高度不變（line-height:1 壓住行高，避免頂列被撐高） */
 #topbar button, #topbar #rec-controls button { font-size: 18px; line-height: 1; }
+/* v183：自繪 SVG 圖案（南勛選定：橡皮擦/套索/量角器/圓規/座標軸）在按鈕裡置中、說明裡對齊文字 */
+.tool svg { display: block; margin: 0 auto; }
+svg.icn { vertical-align: -5px; }
 .tool.active { background: #d0ebff; border-color: #1971c2; }
 .color { width: 30px; height: 30px; border-radius: 50%; padding: 0; border: 2px solid #adb5bd; }
 .color.active { border-color: #212529; transform: scale(1.15); }

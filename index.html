@@ -99,23 +99,23 @@
         </div>
         <button data-tool="pen" class="tool active" title="畫筆">✏️</button>
         <button data-tool="highlighter" class="tool" title="螢光筆">🖍️</button>
-        <button data-tool="eraser" class="tool" title="橡皮擦">🧽</button>
-        <button data-tool="lasso" class="tool" title="套索（選取）：點一下圖形/筆跡選一個、畫圈選多個；選中後中心把手拖曳移動、角落圓箭頭拖曳旋轉">🪢</button>
+        <button data-tool="eraser" class="tool" title="橡皮擦"><svg width="34" height="34" viewBox="0 0 48 48" aria-hidden="true"><rect x="7" y="15" width="34" height="18" rx="4" fill="#ffa8c5"/><rect x="7" y="15" width="15" height="18" rx="4" fill="#e7f5ff"/><rect x="19" y="15" width="3" height="18" fill="#ced4da"/></svg></button>
+        <button data-tool="lasso" class="tool" title="套索（選取）：點一下圖形/筆跡選一個、畫圈選多個；選中後中心把手拖曳移動、角落圓箭頭拖曳旋轉"><svg width="26" height="26" viewBox="0 0 48 48" aria-hidden="true"><rect x="8" y="11" width="32" height="26" rx="5" fill="none" stroke="#495057" stroke-width="3.6" stroke-dasharray="7 5.5"/></svg></button>
         <button data-tool="line" class="tool" title="直線">➖</button>
         <button data-tool="arrow" class="tool" title="箭頭">➡️</button>
         <button data-tool="rect" class="tool" title="矩形">⬜</button>
         <button data-tool="rtriangle" class="tool" title="直角三角形">◺</button>
         <button data-tool="parallelogram" class="tool" title="平行四邊形">▱</button>
         <button data-tool="ellipse" class="tool" title="橢圓">⭕</button>
-        <button data-tool="axes" class="tool" title="座標軸">📊</button>
+        <button data-tool="axes" class="tool" title="座標軸"><svg width="26" height="26" viewBox="0 0 48 48" aria-hidden="true"><g stroke="#495057" stroke-width="3.4" stroke-linecap="round" fill="none"><path d="M 10 5 V 38 H 43"/></g><path d="M 10 3 L 5.8 11 L 14.2 11 Z" fill="#495057"/><path d="M 45 38 L 37 33.8 L 37 42.2 Z" fill="#495057"/><g stroke="#adb5bd" stroke-width="2"><line x1="10" y1="27" x2="34" y2="27" stroke-dasharray="1 6" stroke-linecap="round"/><line x1="21" y1="38" x2="21" y2="14" stroke-dasharray="1 6" stroke-linecap="round"/></g></svg></button>
         <button data-tool="text" class="tool" title="文字">🔤</button>
         <button data-tool="laser" class="tool" title="雷射筆（不錄影）">🔴</button>
       </div>
       <div class="tool-group" id="instruments">
         <label class="lbl">規尺</label>
         <button data-overlay="ruler" class="tool" title="直尺（拖曳移動／把手旋轉，靠尺緣畫直線）">📏</button>
-        <button data-overlay="protractor" class="tool" title="量角器（圓心為角頂，射線自動吸附 5°）">📐</button>
-        <button data-tool="compass" class="tool" title="圓規（點一下啟用，再點一下關閉；啟用後在畫布上按住拖曳畫圓）">🧭</button>
+        <button data-overlay="protractor" class="tool" title="量角器（圓心為角頂，射線自動吸附 5°）"><svg width="26" height="26" viewBox="0 0 48 48" aria-hidden="true"><path d="M 5 36 A 19 19 0 0 1 43 36 Z" fill="none" stroke="#495057" stroke-width="3.2"/><g stroke="#495057" stroke-width="2.4" stroke-linecap="round"><line x1="8.7" y1="27.5" x2="11.5" y2="29.7"/><line x1="15.5" y1="20.6" x2="17.6" y2="23.4"/><line x1="24" y1="18.2" x2="24" y2="21.8"/><line x1="32.5" y1="20.6" x2="30.4" y2="23.4"/><line x1="39.3" y1="27.5" x2="36.5" y2="29.7"/></g></svg></button>
+        <button data-tool="compass" class="tool" title="圓規（點一下啟用，再點一下關閉；啟用後在畫布上按住拖曳畫圓）"><svg width="26" height="26" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="9" r="4.6" fill="none" stroke="#495057" stroke-width="3.2"/><g stroke="#495057" stroke-width="3.6" stroke-linecap="round"><line x1="21.5" y1="12.5" x2="13" y2="42"/><line x1="26.5" y1="12.5" x2="35" y2="42"/></g></svg></button>
       </div>
       <!-- v112：顏色＋粗細收進 popover，平時只佔一顆按鈕（v120：已搬到 #tools 內套索旁邊） -->
       <div class="tool-group row">
@@ -279,12 +279,12 @@
       <p style="margin:8px 0"><b>📄 存 PDF</b>：把所有頁面存成一份 PDF。</p>
 <p style="margin:18px 0 6px;padding:4px 10px;background:#e8f1fa;color:#1971c2;font-weight:700;border-radius:6px;font-size:14px">工具列</p>
       <p style="margin:8px 0"><b>✋ 手抓</b>：點住文字、圖形、筆跡，直接拖曳移動，不用先選取。</p>
-      <p style="margin:8px 0"><b>🪢 套索</b>：點一下＝選一個；畫圈＝選多個。<br>按住中心把手拖曳＝移動；按住角落圓箭頭拖曳＝旋轉。<br>在其他地方下筆＝確定（選取消失）。</p>
+      <p style="margin:8px 0"><b><svg class="icn" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><rect x="8" y="11" width="32" height="26" rx="5" fill="none" stroke="#495057" stroke-width="3.6" stroke-dasharray="7 5.5"/></svg> 套索</b>：點一下＝選一個；畫圈＝選多個。<br>按住中心把手拖曳＝移動；按住角落圓箭頭拖曳＝旋轉。<br>在其他地方下筆＝確定（選取消失）。</p>
       <p style="margin:8px 0"><b>🎨 顏色</b>：16 色＋自訂色（彩虹格），點顏色就換。</p>
       <p style="margin:8px 0"><b>━ 粗細</b>：顏色盤下方的滑桿，拖曳調整筆跡粗細；右邊的數字就是目前粗細。畫筆和螢光筆各自記住自己的數字。</p>
       <p style="margin:8px 0"><b>✏️ 畫筆</b>：一般書寫，App 打開的預設工具。</p>
       <p style="margin:8px 0"><b>🖍️ 螢光筆</b>：半透明粗筆，畫重點用。</p>
-      <p style="margin:8px 0"><b>🧽 橡皮擦</b>：擦掉碰到的筆跡；重播時看得到擦除過程。</p>
+      <p style="margin:8px 0"><b><svg class="icn" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><rect x="7" y="15" width="34" height="18" rx="4" fill="#ffa8c5"/><rect x="7" y="15" width="15" height="18" rx="4" fill="#e7f5ff"/><rect x="19" y="15" width="3" height="18" fill="#ced4da"/></svg> 橡皮擦</b>：擦掉碰到的筆跡；重播時看得到擦除過程。</p>
       <p style="margin:8px 0"><b>➖ 直線</b>：拖曳畫出直線。</p>
       <p style="margin:8px 0"><b>➡️ 箭頭</b>：拖曳畫出箭頭。</p>
       <p style="margin:8px 0"><b>⬜ 矩形</b>：拖曳畫出矩形。</p>
@@ -292,12 +292,12 @@
       <p style="margin:8px 0"><b>▱ 平行四邊形</b>：拖曳畫出平行四邊形。</p>
       <p style="margin:8px 0"><b>⭕ 橢圓</b>：拖曳畫出橢圓。</p>
       <p style="margin:8px 0">圖形畫完<b>不會自動選取</b>；要搬動，用手抓直接拖，或用套索選起來。直線、箭頭只能移動，不能旋轉。</p>
-      <p style="margin:8px 0"><b>📊 座標軸</b>：一筆畫出 x-y 座標軸。</p>
+      <p style="margin:8px 0"><b><svg class="icn" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><g stroke="#495057" stroke-width="3.4" stroke-linecap="round" fill="none"><path d="M 10 5 V 38 H 43"/></g><path d="M 10 3 L 5.8 11 L 14.2 11 Z" fill="#495057"/><path d="M 45 38 L 37 33.8 L 37 42.2 Z" fill="#495057"/><g stroke="#adb5bd" stroke-width="2"><line x1="10" y1="27" x2="34" y2="27" stroke-dasharray="1 6" stroke-linecap="round"/><line x1="21" y1="38" x2="21" y2="14" stroke-dasharray="1 6" stroke-linecap="round"/></g></svg> 座標軸</b>：一筆畫出 x-y 座標軸。</p>
       <p style="margin:8px 0"><b>🔤 文字</b>：點畫布叫出輸入框，打字放上畫布。</p>
       <p style="margin:8px 0"><b>🔴 雷射筆</b>：按住拖曳留細紅軌跡，放開自動淡出；不會被記錄。</p>
       <p style="margin:8px 0"><b>📏 直尺</b>：拖曳移動、把手旋轉，靠尺緣畫直線。</p>
-      <p style="margin:8px 0"><b>📐 量角器</b>：圓心是角頂，射線吸附 5° 的倍數。</p>
-      <p style="margin:8px 0"><b>🧭 圓規</b>：點一下啟用，啟用後拖曳畫圓；再點關閉。</p>
+      <p style="margin:8px 0"><b><svg class="icn" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path d="M 5 36 A 19 19 0 0 1 43 36 Z" fill="none" stroke="#495057" stroke-width="3.2"/><g stroke="#495057" stroke-width="2.4" stroke-linecap="round"><line x1="8.7" y1="27.5" x2="11.5" y2="29.7"/><line x1="15.5" y1="20.6" x2="17.6" y2="23.4"/><line x1="24" y1="18.2" x2="24" y2="21.8"/><line x1="32.5" y1="20.6" x2="30.4" y2="23.4"/><line x1="39.3" y1="27.5" x2="36.5" y2="29.7"/></g></svg> 量角器</b>：圓心是角頂，射線吸附 5° 的倍數。</p>
+      <p style="margin:8px 0"><b><svg class="icn" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="9" r="4.6" fill="none" stroke="#495057" stroke-width="3.2"/><g stroke="#495057" stroke-width="3.6" stroke-linecap="round"><line x1="21.5" y1="12.5" x2="13" y2="42"/><line x1="26.5" y1="12.5" x2="35" y2="42"/></g></svg> 圓規</b>：點一下啟用，啟用後拖曳畫圓；再點關閉。</p>
       <p style="margin:8px 0"><b>↩️ 復原</b>：上一步當作沒發生（畫筆從時間軸移除；移動過的筆跡退回原位）。雙指輕觸畫布也可以。</p>
       <p style="margin:8px 0"><b>↪️ 重做</b>：重做剛被復原的動作。</p>
 <p style="margin:18px 0 6px;padding:4px 10px;background:#e8f1fa;color:#1971c2;font-weight:700;border-radius:6px;font-size:14px">時間軸抽屜</p>
