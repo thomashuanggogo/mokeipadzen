@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v195';
+const APP_VERSION = 'v196';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -494,6 +494,27 @@ function fsGuardExit() {
     toast(window.t('🗑️ 已刪除 {n} 則筆跡', { n: removedStrokes.length }));
   }
   $('btn-sel-delete').onclick = deleteLassoSelection; // v194：第二排工具列・套索旁的紅色 ✕（選取時出現）
+  /* v196：電腦鍵盤（南勛在電腦上用墨課按 Delete 沒反應才補上）：
+     Delete/Backspace＝刪選取（同第二排 ✕）；Ctrl+Z 復原、Ctrl+Shift+Z / Ctrl+Y 重做。
+     防誤觸：正在打字（輸入框/文字編輯）、有任何視窗開著時不動作；
+     時間軸編輯模式有選筆跡時，Delete 改走時間軸的刪除鈕（它自帶確認框）。 */
+  window.addEventListener('keydown', (e) => {
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    if (document.querySelector('.modal:not(.hidden)')) return;
+    if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+      const k = (e.key || '').toLowerCase();
+      if (k === 'z' && !e.shiftKey) { e.preventDefault(); board.undo(); return; }
+      if ((k === 'z' && e.shiftKey) || k === 'y') { e.preventDefault(); board.redo(); return; }
+    }
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      const tlPanel = $('tl-edit-panel');
+      if (tlPanel && !tlPanel.classList.contains('hidden') && typeof tlEditSelIds !== 'undefined' && tlEditSelIds.size) {
+        e.preventDefault(); $('btn-tl-del-stroke').click(); return;
+      }
+      if (board._lassoSel && board._lassoSel.length) { e.preventDefault(); deleteLassoSelection(); }
+    }
+  });
   window._mokeUpdateRotateBtns = () => {
     const sel = board._lassoSel;
     // v142：直線/箭頭不需要旋轉——單選線條時隱藏旋轉鈕
@@ -586,7 +607,7 @@ function fsGuardExit() {
      特別版本（指定的力、角度、數據）走 maker JSON 匯入，一樣變成圖形物件。
      電阻只收台灣高中畫法（IEC 矩形版不收，免得學生混淆）。 */
   const STICKER_PARTS = [
-    { id: 'p-mech', name: '力學', types: ['forceArrow', 'velocityArrow', 'accelerationArrow', 'block', 'ramp', 'ball', 'pulley', 'movablePulley', 'spring', 'pendulum', 'cart', 'surface', 'rope', 'hangingMass', 'fulcrum', 'lever'] },
+    { id: 'p-mech', name: '力學', types: ['block', 'ramp', 'ball', 'pulley', 'movablePulley', 'spring', 'pendulum', 'cart', 'surface', 'rope', 'hangingMass', 'fulcrum', 'lever'] },
     { id: 'p-wave', name: '波動', types: ['planeWave', 'circularWave', 'sineWave', 'singleSlit', 'doubleSlit', 'barrier', 'pointSource', 'diffraction', 'interference', 'standingWave', 'openPipeStandingWave', 'closedPipeStandingWave', 'longitudinalWave'] },
     { id: 'p-optics', name: '光學', types: ['ray', 'convexLens', 'concaveLens', 'planeMirror', 'concaveMirror', 'convexMirror', 'screen', 'normalLine', 'prism', 'principalAxis', 'focalMarker', 'opticalObject'] },
     { id: 'p-em', name: '電磁學', types: ['positiveCharge', 'negativeCharge', 'electricFieldPoint', 'parallelPlateField', 'magneticIntoPage', 'magneticOutPage', 'uniformMagneticField', 'barMagnetField', 'wireMagneticField', 'loopMagneticField', 'solenoidField', 'transformer', 'generator'] },
