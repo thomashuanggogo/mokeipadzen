@@ -19,6 +19,7 @@ class Board {
     this.onDrawStart = null;      // 落筆前鉤子（時間軸：回放中落筆＝插入）
     this.onDrawEnd = null;        // 提筆後鉤子
     this.tlCutoff = null;         // v47：時間軸回放過濾（null＝全顯示，否則只畫 tlT <= cutoff 的筆跡）
+    this._stickerEls = new Map(); // v195：貼紙圖形物件的圖片元素快取（key=筆跡 id+src 特徵，不存進課程檔）
     this._tlPlayhead = null;        // v47：回放中落筆時，筆跡的時間（null＝用自然時間）
     this._tlInsertNext = 0;         // v175：補線游標（下一筆插入的時間點）
     this._tlInsertFor = null;       // v175：游標所屬的播放頭位置
@@ -271,6 +272,37 @@ class Board {
     this.render();
     return im;
   }
+  /* v195：貼紙＝圖形物件（南勛定版：貼紙要跟三角形、圓形一樣看待）。
+     不再進底圖層，改建一筆 tool:'sticker' 的筆跡：有自己的時間點（tlT），
+     回放時到點才出現；套索可跟筆跡一起選、中心把手移動、角落把手旋轉、第二排 ✕ 刪除。
+     幾何：fx/fy=中心（分數）、fw/fh=寬高（分數）、rot=旋轉角；src=圖的 data URL。
+     座標一律走頁面的分數空間（lockBg 頁自動換算），與其他筆跡一致。 */
+  addSticker(src, cxPx, cyPx, wPx, hPx) {
+    const b = this._lockBounds();
+    const spanX = b ? (b.x1 - b.x0) : this._cssW;
+    const spanY = b ? (b.y1 - b.y0) : this._cssH;
+    const fx = b ? (cxPx - b.x0) / spanX : cxPx / this._cssW;
+    const fy = b ? (cyPx - b.y0) / spanY : cyPx / this._cssH;
+    const s = this._newStroke('sticker', {
+      src,
+      fx: this._r4(fx), fy: this._r4(fy),
+      fw: this._r4(wPx / spanX), fh: this._r4(hPx / spanY),
+      rot: 0, dur: 300, pts: []
+    });
+    return this.addStroke(s);
+  }
+  /* v195：貼紙圖片元素（載入後自動重繪；快取不進存檔） */
+  _stickerEl(s) {
+    const key = s.id + ':' + (s.src ? s.src.length : 0) + ':' + (s.src ? s.src.slice(-24) : '');
+    let el = this._stickerEls.get(key);
+    if (!el) {
+      el = new Image();
+      el.onload = () => this.render();
+      el.src = s.src;
+      this._stickerEls.set(key, el);
+    }
+    return el;
+  }
   /* v139：刪除指定圖片 */
   removeImage(id) {
     const pg = this.page;
@@ -462,6 +494,7 @@ class Board {
   _hitStroke(s, x, y) {
     const W = this._cssW, H = this._cssH;
     const tol = Math.max(14, s.width * (W / 1000) + 8);
+    if (s.tool === 'sticker') return false; // v195：貼紙是整張圖，橡皮擦擦不掉（要刪用選取＋✕，整張刪）
     if (s.tool === 'text') {
       const sx = s.fx * W, sy = s.fy * H;
       return Math.hypot(x - sx, y - sy) < Math.max(30, s.size * (W / 1000));
@@ -808,7 +841,7 @@ class Board {
         s._origFx1 = s.fx1; s._origFy1 = s.fy1;
         s._origPts = s.pts ? s.pts.map(pt => [pt[0], pt[1], pt[2], pt[3]]) : null;
       }
-      if (s.tool === 'text' && s.fx !== undefined) {
+      if ((s.tool === 'text' || s.tool === 'sticker') && s.fx !== undefined) {
         const [nx, ny] = rotPx(s.fx * W, s.fy * H);
         s.fx = this._r4(nx / W); s.fy = this._r4(ny / H);
         // v108：文字本身也旋轉（累計角度，不變形）
@@ -867,7 +900,7 @@ class Board {
         const [ax, ay] = this._fracToPx(s.fx0, s.fy0);
         const [bx, by] = this._fracToPx(s.fx1, s.fy1);
         hit = segDist(cx, cy, ax, ay, bx, by) <= 16;
-      } else if (s.tool === 'shape') {
+      } else if (s.tool === 'shape' || s.tool === 'sticker') {
         const c = this._strokePointsPx(s, W, H);  // 旋轉後四角，順序 (x0,y0)(x1,y0)(x0,y1)(x1,y1)
         const quad = [c[0], c[1], c[3], c[2]].map(([x, y]) => ({ x, y }));
         if (this._pointInPoly(cx, cy, quad)) hit = true;
@@ -992,6 +1025,13 @@ class Board {
     if (s.tool === 'text') {
       // 文字繞 (fx,fy) 旋轉，取錨點即可（選取框用）
       pts.push(this._fracToPx(s.fx, s.fy));
+    } else if (s.tool === 'sticker') {
+      // v195：貼紙取旋轉後四角（中心±半寬半高），順序同 shape：(x0,y0)(x1,y0)(x0,y1)(x1,y1)
+      const [cx, cy] = this._fracToPx(s.fx, s.fy);
+      const [x0, y0] = this._fracToPx(s.fx - s.fw / 2, s.fy - s.fh / 2);
+      const [x1, y1] = this._fracToPx(s.fx + s.fw / 2, s.fy + s.fh / 2);
+      pts.push(rotPt(x0, y0, cx, cy), rotPt(x1, y0, cx, cy),
+               rotPt(x0, y1, cx, cy), rotPt(x1, y1, cx, cy));
     } else if (s.tool === 'shape') {
       const [x0, y0] = this._fracToPx(s.fx0, s.fy0);
       const [x1, y1] = this._fracToPx(s.fx1, s.fy1);
@@ -2003,6 +2043,24 @@ class Board {
         ctx.restore();
       } else {
         ctx.fillText(s.text, fx * W, fy * H + (s.size || 48) * k * 0.8);
+      }
+      ctx.restore(); return;
+    }
+    if (s.tool === 'sticker') {
+      // v195：貼紙整張出現（不做逐筆進度）；重播時用 cutoff 時間的位置（移動前顯示舊位置）
+      let fx = s.fx, fy = s.fy, rot = s.rot || 0;
+      if (this.tlCutoff !== null && this.tlCutoff !== undefined) {
+        const pos = this._strokePosAt(s, this.tlCutoff);
+        if (pos && pos.fx !== undefined) { fx = pos.fx; fy = pos.fy; rot = pos.rot || 0; }
+      }
+      const el = this._stickerEl(s);
+      if (el && el.naturalWidth) {
+        const cx = fx * W, cy = fy * H, dw = s.fw * W, dh = s.fh * H;
+        ctx.save();
+        ctx.translate(cx, cy);
+        if (rot) ctx.rotate(rot * Math.PI / 180);
+        ctx.drawImage(el, -dw / 2, -dh / 2, dw, dh);
+        ctx.restore();
       }
       ctx.restore(); return;
     }
