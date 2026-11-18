@@ -54,6 +54,8 @@ class Board {
     // v145：圖形自動辨識（畫圓/直線後停頓 0.6 秒自動變乾淨圖形，預設開；localStorage 可關）
     this.autoShape = true;
     this._autoShapeTimer = null;
+    // v184：座標軸原點模式（'center' 中央／'bl' 左下角第一象限），由 app.js 從 localStorage 設定
+    this.axesOrigin = 'center';
     // 幾何規尺（v14）：由 app.js 設定
     this.ruler = null;            // {x,y,angle,len,wd} px，null=隱藏
     this.protractor = null;       // {x,y,angle,R} px，null=隱藏
@@ -458,7 +460,7 @@ class Board {
     }
     if (s.tool === 'shape') {
       const x0 = s.fx0 * W, y0 = s.fy0 * H, x1 = s.fx1 * W, y1 = s.fy1 * H;
-      for (const sg of this._shapeSegments(s.shape, x0, y0, x1, y1)) {
+      for (const sg of this._shapeSegments(s.shape, x0, y0, x1, y1, s.origin)) {
         if (this._distToSeg(x, y, sg[0], sg[1], sg[2], sg[3]) < tol) return true;
       }
       return false;
@@ -484,7 +486,7 @@ class Board {
   }
 
   // 圖形各線段（橡皮擦 hit-test 用），與 _strokeShape 的繪製一致
-  _shapeSegments(shape, x0, y0, x1, y1) {
+  _shapeSegments(shape, x0, y0, x1, y1, origin) {
     const segs = [];
     const line = (ax, ay, bx, by) => segs.push([ax, ay, bx, by]);
     if (shape === 'line' || shape === 'arrow') {
@@ -506,10 +508,18 @@ class Board {
       line(x0 + sx, y0, x1, y0); line(x1, y0, x1 - sx, y1);
       line(x1 - sx, y1, x0, y1); line(x0, y1, x0 + sx, y0);
     } else if (shape === 'axes') {
-      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-      const hw = Math.abs(x1 - x0) / 2, hh = Math.abs(y1 - y0) / 2;
-      line(cx - hw, cy, cx + hw, cy);
-      line(cx, cy + hh, cx, cy - hh);
+      if (origin === 'bl') {
+        // v184：原點左下角——x 軸沿底邊、y 軸沿左邊
+        const lx = Math.min(x0, x1), rx = Math.max(x0, x1);
+        const ty = Math.min(y0, y1), by = Math.max(y0, y1);
+        line(lx, by, rx, by);
+        line(lx, by, lx, ty);
+      } else {
+        const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+        const hw = Math.abs(x1 - x0) / 2, hh = Math.abs(y1 - y0) / 2;
+        line(cx - hw, cy, cx + hw, cy);
+        line(cx, cy + hh, cx, cy - hh);
+      }
     }
     return segs;
   }
@@ -1151,7 +1161,8 @@ class Board {
     if (this.tool === 'eraser') { const lp = this._inkPos(e, p); this.eraseAt(lp.fx, lp.fy); this._erasing = true; return; }
     if (this.tool === 'text') { if (this.onTextTap) this.onTextTap(p.fx, p.fy); return; }
     if (['line', 'arrow', 'rect', 'ellipse', 'rtriangle', 'parallelogram', 'axes'].includes(this.tool)) {
-      this._beginShapeDrag({ shape: this.tool, fx0: p.fx, fy0: p.fy, fx1: p.fx, fy1: p.fy, t: performance.now() });
+      this._beginShapeDrag({ shape: this.tool, fx0: p.fx, fy0: p.fy, fx1: p.fx, fy1: p.fy, t: performance.now(),
+        origin: this.tool === 'axes' ? this.axesOrigin : undefined });
       return;
     }
     if (this.tool === 'compass') {
@@ -1494,6 +1505,7 @@ class Board {
       else {
         const s = this._newStroke('shape', {
           shape: d.shape,
+          origin: d.shape === 'axes' ? (d.origin || 'center') : undefined,
           fx0: this._r4(d.fx0), fy0: this._r4(d.fy0),
           fx1: this._r4(d.fx1), fy1: this._r4(d.fy1),
           dur: Math.round(performance.now() - d.t)
@@ -2004,10 +2016,10 @@ class Board {
         ctx.translate(scx, scy);
         ctx.rotate(rot * Math.PI / 180);
         ctx.translate(-scx, -scy);
-        this._strokeShape(ctx, s.shape, x0, y0, x1, y1);
+        this._strokeShape(ctx, s.shape, x0, y0, x1, y1, s.origin);
         ctx.restore();
       } else {
-        this._strokeShape(ctx, s.shape, x0, y0, x1, y1);
+        this._strokeShape(ctx, s.shape, x0, y0, x1, y1, s.origin);
       }
       ctx.restore(); return;
     }
@@ -2092,7 +2104,7 @@ class Board {
     }
   }
 
-  _strokeShape(ctx, shape, x0, y0, x1, y1) {
+  _strokeShape(ctx, shape, x0, y0, x1, y1, origin) {
     ctx.beginPath();
     if (shape === 'line' || shape === 'arrow') {
       ctx.moveTo(x0, y0); ctx.lineTo(x1, y1);
@@ -2122,24 +2134,44 @@ class Board {
       ctx.moveTo(x0 + sx, y0); ctx.lineTo(x1, y0); ctx.lineTo(x1 - sx, y1); ctx.lineTo(x0, y1); ctx.closePath();
       ctx.stroke();
     } else if (shape === 'axes') {
-      // 座標軸：中心在矩形中心，x 軸向右、y 軸向上，含箭頭與刻度
-      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-      const hw = Math.abs(x1 - x0) / 2, hh = Math.abs(y1 - y0) / 2;
       const alen = Math.max(10, ctx.lineWidth * 2.5);
       const tick = Math.max(4, ctx.lineWidth * 0.8);
-      ctx.moveTo(cx - hw, cy); ctx.lineTo(cx + hw, cy);                       // x 軸
-      ctx.moveTo(cx + hw, cy); ctx.lineTo(cx + hw - alen, cy - alen * 0.45);  // x 箭頭
-      ctx.moveTo(cx + hw, cy); ctx.lineTo(cx + hw - alen, cy + alen * 0.45);
-      ctx.moveTo(cx, cy + hh); ctx.lineTo(cx, cy - hh);                       // y 軸
-      ctx.moveTo(cx, cy - hh); ctx.lineTo(cx - alen * 0.45, cy - hh + alen);  // y 箭頭
-      ctx.moveTo(cx, cy - hh); ctx.lineTo(cx + alen * 0.45, cy - hh + alen);
-      for (let i = 1; i < 10; i++) {                                         // 刻度
-        const tx = cx - hw + (2 * hw * i) / 10;
-        ctx.moveTo(tx, cy - tick); ctx.lineTo(tx, cy + tick);
-        const ty = cy - hh + (2 * hh * i) / 10;
-        ctx.moveTo(cx - tick, ty); ctx.lineTo(cx + tick, ty);
+      if (origin === 'bl') {
+        // v184：原點在左下角（第一象限作圖）：x 軸沿底邊向右、y 軸沿左邊向上；
+        // 刻度等間距：x 一格＝寬/10、y 一格＝高/10（兩軸大小各自獨立）
+        const lx = Math.min(x0, x1), rx = Math.max(x0, x1);
+        const ty = Math.min(y0, y1), by = Math.max(y0, y1);
+        ctx.moveTo(lx, by); ctx.lineTo(rx, by);                        // x 軸
+        ctx.moveTo(rx, by); ctx.lineTo(rx - alen, by - alen * 0.45);   // x 箭頭
+        ctx.moveTo(rx, by); ctx.lineTo(rx - alen, by + alen * 0.45);
+        ctx.moveTo(lx, by); ctx.lineTo(lx, ty);                        // y 軸
+        ctx.moveTo(lx, ty); ctx.lineTo(lx - alen * 0.45, ty + alen);   // y 箭頭
+        ctx.moveTo(lx, ty); ctx.lineTo(lx + alen * 0.45, ty + alen);
+        for (let i = 1; i < 10; i++) {                                 // 刻度
+          const tx = lx + ((rx - lx) * i) / 10;
+          ctx.moveTo(tx, by - tick); ctx.lineTo(tx, by + tick);
+          const ty2 = by - ((by - ty) * i) / 10;
+          ctx.moveTo(lx - tick, ty2); ctx.lineTo(lx + tick, ty2);
+        }
+        ctx.stroke();
+      } else {
+        // 座標軸：中心在矩形中心，x 軸向右、y 軸向上，含箭頭與刻度
+        const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+        const hw = Math.abs(x1 - x0) / 2, hh = Math.abs(y1 - y0) / 2;
+        ctx.moveTo(cx - hw, cy); ctx.lineTo(cx + hw, cy);                       // x 軸
+        ctx.moveTo(cx + hw, cy); ctx.lineTo(cx + hw - alen, cy - alen * 0.45);  // x 箭頭
+        ctx.moveTo(cx + hw, cy); ctx.lineTo(cx + hw - alen, cy + alen * 0.45);
+        ctx.moveTo(cx, cy + hh); ctx.lineTo(cx, cy - hh);                       // y 軸
+        ctx.moveTo(cx, cy - hh); ctx.lineTo(cx - alen * 0.45, cy - hh + alen);  // y 箭頭
+        ctx.moveTo(cx, cy - hh); ctx.lineTo(cx + alen * 0.45, cy - hh + alen);
+        for (let i = 1; i < 10; i++) {                                         // 刻度
+          const tx = cx - hw + (2 * hw * i) / 10;
+          ctx.moveTo(tx, cy - tick); ctx.lineTo(tx, cy + tick);
+          const ty = cy - hh + (2 * hh * i) / 10;
+          ctx.moveTo(cx - tick, ty); ctx.lineTo(cx + tick, ty);
+        }
+        ctx.stroke();
       }
-      ctx.stroke();
     }
   }
 
@@ -2243,7 +2275,7 @@ class Board {
     ctx.setTransform(dpr * v.scale, 0, 0, dpr * v.scale, dpr * v.ox, dpr * v.oy);
     ctx.strokeStyle = this.color; ctx.lineWidth = this.width * k / v.scale;
     ctx.setLineDash([8, 6]);
-    this._strokeShape(ctx, d.shape, d.fx0 * W, d.fy0 * H, d.fx1 * W, d.fy1 * H);
+    this._strokeShape(ctx, d.shape, d.fx0 * W, d.fy0 * H, d.fx1 * W, d.fy1 * H, d.origin);
     ctx.setLineDash([]);
     if (d._compass) {
       // 圓規圓心標記

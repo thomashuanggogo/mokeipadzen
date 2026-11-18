@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v183';
+const APP_VERSION = 'v184';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -132,8 +132,31 @@ function fsGuardExit() {
       colorPop.classList.add('hidden');
     }
   });
+  /* ----- v184：座標軸原點模式（中央／左下角第一象限），再點一次座標軸按鈕切換，localStorage 記憶 ----- */
+  try { board.axesOrigin = localStorage.getItem('moke-axesOrigin') === 'bl' ? 'bl' : 'center'; } catch (e) {}
+  const AXES_ICON_CENTER = '<svg width="26" height="26" viewBox="0 0 48 48" aria-hidden="true"><g stroke="#495057" stroke-width="3.4" stroke-linecap="round" fill="none"><path d="M 24 43 V 10"/><path d="M 5 24 H 38"/></g><path d="M 24 3 L 19.8 11 L 28.2 11 Z" fill="#495057"/><path d="M 45 24 L 37 19.8 L 37 28.2 Z" fill="#495057"/><g stroke="#adb5bd" stroke-width="2"><line x1="5" y1="35" x2="43" y2="35" stroke-dasharray="1 6" stroke-linecap="round"/><line x1="35" y1="5" x2="35" y2="43" stroke-dasharray="1 6" stroke-linecap="round"/></g></svg>';
+  const AXES_ICON_BL = '<svg width="26" height="26" viewBox="0 0 48 48" aria-hidden="true"><g stroke="#495057" stroke-width="3.4" stroke-linecap="round" fill="none"><path d="M 10 5 V 38 H 43"/></g><path d="M 10 3 L 5.8 11 L 14.2 11 Z" fill="#495057"/><path d="M 45 38 L 37 33.8 L 37 42.2 Z" fill="#495057"/><g stroke="#adb5bd" stroke-width="2"><line x1="10" y1="27" x2="34" y2="27" stroke-dasharray="1 6" stroke-linecap="round"/><line x1="21" y1="38" x2="21" y2="14" stroke-dasharray="1 6" stroke-linecap="round"/></g></svg>';
+  const axesBtn = document.querySelector('#tools .tool[data-tool="axes"]');
+  const updateAxesBtn = () => {
+    if (!axesBtn) return;
+    const bl = board.axesOrigin === 'bl';
+    axesBtn.innerHTML = bl ? AXES_ICON_BL : AXES_ICON_CENTER;
+    axesBtn.title = bl
+      ? '座標軸：原點在左下角（再點一次按鈕＝原點改回中央）'
+      : '座標軸：原點在中央（再點一次按鈕＝原點改到左下角）';
+  };
+  function toggleAxesOrigin() {
+    board.axesOrigin = board.axesOrigin === 'bl' ? 'center' : 'bl';
+    try { localStorage.setItem('moke-axesOrigin', board.axesOrigin); } catch (e) {}
+    updateAxesBtn();
+    toast(board.axesOrigin === 'bl' ? '座標軸原點：左下角（第一象限作圖）' : '座標軸原點：中央');
+  }
+  updateAxesBtn();
+
   document.querySelectorAll('#tools .tool[data-tool]').forEach(b => {
     b.onclick = () => {
+      // v184：座標軸已在用時再點一次＝切換原點（中央 ⇄ 左下角），不重設工具
+      if (b.dataset.tool === 'axes' && board.tool === 'axes') { toggleAxesOrigin(); return; }
       board.setTool(b.dataset.tool);
       document.querySelectorAll('#tools .tool[data-tool]').forEach(x => x.classList.remove('active'));
       document.querySelectorAll('#instruments .tool').forEach(x => { if (!x.dataset.overlay) x.classList.remove('active'); });
