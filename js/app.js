@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v203';
+const APP_VERSION = 'v204';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -413,18 +413,49 @@ function fsGuardExit() {
   };
 
   /* ----- 背景 / 圖片 / 頁面 ----- */
-  const BGS = ['white', 'blackboard', 'grid', 'lines'];
-  const BG_NAMES = { white: '白板', blackboard: '黑板', grid: '方格', lines: '橫線' };
-  $('btn-bg').onclick = () => {
-    const cur = board.page.bg;
-    const next = BGS[(BGS.indexOf(cur) + 1) % BGS.length];
-    board.setBackground(next);
-    if (next === 'blackboard' && board.color === '#111111') {
-      board.setColor('#ffffff');
-      colorBox.querySelectorAll('.color').forEach(x => x.classList.toggle('active', x.title === '#ffffff'));
+  /* v204：背景改選單（原「點一下循環」只有 4 種、找新背景要連點好幾下）——
+     點 🎨 開 popover（比照 #color-pop），7 種帶名稱的選項格，點了就換、選單關閉。 */
+  const BGS = ['white', 'blackboard', 'grid', 'gridfine', 'lines', 'axes', 'staff'];
+  const BG_NAMES = { white: '白板', blackboard: '黑板', grid: '方格', gridfine: '細方格', lines: '橫線', axes: '座標紙', staff: '五線譜' };
+  const bgPop = $('bg-pop');
+  const bgGrid = $('bg-grid');
+  BGS.forEach(key => {
+    const b = document.createElement('button');
+    b.className = 'bg-cell';
+    b.dataset.bg = key;
+    b.innerHTML = '<span class="bg-prev p-' + key + '"></span><span class="bg-nm">' + BG_NAMES[key] + '</span>';
+    b.onclick = () => {
+      board.setBackground(key);
+      // 沿用舊循環版行為：換到黑板且筆色是黑時，自動換白筆才看得見
+      if (key === 'blackboard' && board.color === '#111111') {
+        board.setColor('#ffffff');
+        colorBox.querySelectorAll('.color').forEach(x => x.classList.toggle('active', x.title === '#ffffff'));
+        colorDot.style.background = '#ffffff';
+      }
+      bgPop.classList.add('hidden');
+      toast(window.t('背景：{name}', { name: window.t(BG_NAMES[key]) }));
+    };
+    bgGrid.appendChild(b);
+  });
+  $('btn-bg').onclick = (e) => {
+    e.stopPropagation();
+    if (bgPop.classList.contains('hidden')) {
+      bgGrid.querySelectorAll('.bg-cell').forEach(c => c.classList.toggle('active', c.dataset.bg === board.page.bg));
+      const r = $('btn-bg').getBoundingClientRect();
+      bgPop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 290)) + 'px';
+      bgPop.style.top = (r.bottom + 6) + 'px';
+      bgPop.classList.remove('hidden');
+    } else {
+      bgPop.classList.add('hidden');
     }
-    toast(window.t('背景：{name}', { name: window.t(BG_NAMES[next]) }));
   };
+  // 點選單外任意處／視窗縮放時關閉（比照 color-pop）
+  document.addEventListener('click', (e) => {
+    if (!bgPop.classList.contains('hidden') && !bgPop.contains(e.target) && !$('btn-bg').contains(e.target)) {
+      bgPop.classList.add('hidden');
+    }
+  });
+  window.addEventListener('resize', () => bgPop.classList.add('hidden'));
   $('btn-image').onclick = () => $('file-image').click();
   $('file-image').onchange = e => {
     const f = e.target.files[0]; if (!f) return;
@@ -494,6 +525,11 @@ function fsGuardExit() {
     toast(window.t('🗑️ 已刪除 {n} 則筆跡', { n: removedStrokes.length }));
   }
   $('btn-sel-delete').onclick = deleteLassoSelection; // v194：第二排工具列・套索旁的紅色 ✕（選取時出現）
+  /* v204：複製鈕（緊鄰 ✕、同套顯示時機）——複製選取一份、複製組成為新選取可直接拖曳定位 */
+  $('btn-sel-copy').onclick = () => {
+    const copies = board.duplicateSelection();
+    if (copies.length) toast(window.t('已複製 {n} 筆，拖到想要的位置', { n: copies.length }));
+  };
   /* v196：電腦鍵盤（南勛在電腦上用墨課按 Delete 沒反應才補上）：
      Delete/Backspace＝刪選取（同第二排 ✕）；Ctrl+Z 復原、Ctrl+Shift+Z / Ctrl+Y 重做。
      防誤觸：正在打字（輸入框/文字編輯）、有任何視窗開著時不動作；
@@ -524,6 +560,8 @@ function fsGuardExit() {
     $('btn-rotate-right').classList.toggle('hidden', !show);
     // v194：第二排工具列的選取刪除鈕——有選取就顯示（直線/箭頭也能刪）
     $('btn-sel-delete').classList.toggle('hidden', !(sel && sel.length));
+    // v204：複製鈕跟 ✕ 同一套顯示/隱藏時機
+    $('btn-sel-copy').classList.toggle('hidden', !(sel && sel.length));
   };
   window._mokeToast = toast; // v131：供 board.js 顯示提示
   /* ----- v73：底圖調整模式（雙指縮放調大小、單指拖曳移位置） ----- */

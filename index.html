@@ -43,7 +43,7 @@
       <button id="btn-page-next" title="下一頁">▶</button>
       <button id="btn-page-add" title="新增頁面">＋</button>
       <button id="btn-page-del" title="刪除本頁">🗑️ <span class="btn-label">刪頁</span></button>
-      <button id="btn-bg" title="切換背景">🎨 <span class="btn-label">背景</span></button>
+      <button id="btn-bg" title="選擇背景">🎨 <span class="btn-label">背景</span></button>
       <button id="btn-image" title="插入圖片為底圖">🖼️ <span class="btn-label">圖片</span></button>
       <button id="btn-img-adjust" title="調整底圖大小/位置" class="hidden">🔧 <span class="btn-label">調整底圖</span></button>
       <button id="btn-img-zoom-out" title="縮小底圖" class="hidden">➖</button>
@@ -79,6 +79,11 @@
     <div class="pop-hint">上下：墨往上移的距離，手指大、用指腹寫的人調大。左右：覺得墨偏左就往右調、偏右就往左調。0＝不補正。設定會記住。</div>
   </div>
 
+  <!-- v204：背景選單（🎨）— 比照 #color-pop 的 fixed popover，選項格由 app.js 依 BGS 清單建立 -->
+  <div id="bg-pop" class="hidden">
+    <div id="bg-grid"></div>
+  </div>
+
   <!-- 講者視圖面板（v13）：Preview Next，老師端專用 -->
   <!-- 主區 -->
   <main id="stage">
@@ -104,6 +109,8 @@
         <button data-tool="lasso" class="tool" title="套索（選取）：點一下圖形/筆跡選一個、畫圈選多個；選中後中心把手拖曳移動、角落圓箭頭拖曳旋轉"><svg width="26" height="26" viewBox="0 0 48 48" aria-hidden="true"><rect x="8" y="11" width="32" height="26" rx="5" fill="none" stroke="#495057" stroke-width="3.6" stroke-dasharray="7 5.5"/></svg></button>
         <!-- v194：選取刪除鈕放第二排工具列、套索旁邊（選取時才出現，紅色 ✕ 與刪頁回收桶區分） -->
         <button id="btn-sel-delete" class="tool hidden" title="刪除選取的筆跡">✕</button>
+        <!-- v204：複製鈕緊鄰刪除鈕，同套顯示/隱藏時機（有選取才出現） -->
+        <button id="btn-sel-copy" class="tool hidden" title="複製選取的筆跡"><svg width="26" height="26" viewBox="0 0 48 48" aria-hidden="true"><rect x="16" y="7" width="26" height="26" rx="4" fill="none" stroke="#adb5bd" stroke-width="3.4"/><rect x="6" y="15" width="26" height="26" rx="4" fill="#fff" stroke="#495057" stroke-width="3.4"/></svg></button>
         <button data-tool="line" class="tool" title="直線">➖</button>
         <button data-tool="arrow" class="tool" title="箭頭">➡️</button>
         <button data-tool="rect" class="tool" title="矩形">⬜</button>
@@ -278,7 +285,7 @@
       <p style="margin:8px 0"><b>＋ 新增頁面</b>：在目前頁後面加一頁空白頁。</p>
       <p style="margin:8px 0"><b>🗑️ 刪除本頁</b>：刪掉目前這一頁（有確認框）。</p>
 <p style="margin:18px 0 6px;padding:4px 10px;background:#e8f1fa;color:#1971c2;font-weight:700;border-radius:6px;font-size:14px">頂部功能</p>
-      <p style="margin:8px 0"><b>🎨 背景</b>：白板／黑板／方格／橫線，點一下循環切換。</p>
+      <p style="margin:8px 0"><b>🎨 背景</b>：點一下打開選單，七種背景點了就換：白板、黑板、方格、細方格、橫線、座標紙、五線譜。</p>
       <p style="margin:8px 0"><b>🖼️ 圖片</b>：從相簿選圖放進本頁，一頁可放多張、疊放。</p>
       <p style="margin:8px 0"><b>🔧 調整底圖</b>：重新進入圖片調整模式。</p>
       <p style="margin:8px 0"><b><svg class="icn" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><g fill="none" stroke="#495057" stroke-width="3.2"><circle cx="16" cy="16" r="8.5"/><rect x="25" y="25" width="16" height="16"/><path d="M 34 5 L 44 19 L 24 19 Z"/></g></svg> 物理圖庫</b>：第二欄「貼紙」的按鈕，開啟物理圖庫（力學、流體、波動、光學、電磁學、電路、熱學、近代物理、零件、道具十類），點一個物件就貼到頁面上。</p>
@@ -306,6 +313,7 @@
       <p style="margin:8px 0"><b>✋ 手抓</b>：點住文字、圖形、筆跡，直接拖曳移動，不用先選取。</p>
       <p style="margin:8px 0"><b><svg class="icn" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><rect x="8" y="11" width="32" height="26" rx="5" fill="none" stroke="#495057" stroke-width="3.6" stroke-dasharray="7 5.5"/></svg> 套索</b>：點一下＝選一個；畫圈＝選多個。<br>按住中心把手拖曳＝移動；按住角落圓箭頭拖曳＝旋轉。<br>在其他地方下筆＝確定（選取消失）。</p>
       <p style="margin:8px 0"><b>✕ 刪除選取</b>：選好筆跡後，第二排工具列的套索旁邊會出現紅色 ✕ 刪除鈕，按下去直接刪掉選中的筆跡（後面的筆自動往前補位）。電腦鍵盤按 Delete 也可以刪。</p>
+      <p style="margin:8px 0"><b><svg class="icn" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><rect x="16" y="7" width="26" height="26" rx="4" fill="none" stroke="#adb5bd" stroke-width="3.4"/><rect x="6" y="15" width="26" height="26" rx="4" fill="#fff" stroke="#495057" stroke-width="3.4"/></svg> 複製選取</b>：選好筆跡後，套索旁邊會出現複製鈕，按下去把選中的筆跡複製一份（位置稍微錯開），複製的那份會被選起來，直接拖到想要的位置。按復原可整批退掉。</p>
       <p style="margin:8px 0"><b>🎨 顏色</b>：16 色＋自訂色（彩虹格），點顏色就換。</p>
       <p style="margin:8px 0"><b>━ 粗細</b>：顏色盤下方的滑桿，拖曳調整筆跡粗細；右邊的數字就是目前粗細。畫筆和螢光筆各自記住自己的數字。</p>
       <p style="margin:8px 0"><b>✏️ 畫筆</b>：一般書寫，App 打開的預設工具。</p>

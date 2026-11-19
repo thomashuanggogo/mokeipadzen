@@ -402,6 +402,96 @@ class Board {
     return stroke;
   }
 
+  /* v204：筆跡在分數空間的包圍盒（供複製偏移 clamp 用；text 以錨點計、sticker 以中心±半寬高計） */
+  _strokeFracBBox(s) {
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    const eat = (x, y) => { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; };
+    if (s.tool === 'sticker') {
+      eat(s.fx - (s.fw || 0) / 2, s.fy - (s.fh || 0) / 2);
+      eat(s.fx + (s.fw || 0) / 2, s.fy + (s.fh || 0) / 2);
+    } else if (s.tool === 'shape' || s.fx0 !== undefined) {
+      eat(s.fx0, s.fy0); eat(s.fx1, s.fy1);
+    } else if (s.fx !== undefined) {
+      eat(s.fx, s.fy);
+    }
+    if (s.pts) for (const pt of s.pts) eat(pt[1], pt[2]);
+    return x1 >= x0 ? { x0, y0, x1, y1 } : null;
+  }
+  /* v204：把一筆在分數空間平移（fx/fy、fx0..、pts 全套，比照 _applyPosItems 的欄位慣例） */
+  _shiftStrokeFrac(s, dx, dy) {
+    if (s.fx !== undefined) { s.fx = this._r4(s.fx + dx); s.fy = this._r4(s.fy + dy); }
+    if (s.fx0 !== undefined) {
+      s.fx0 = this._r4(s.fx0 + dx); s.fy0 = this._r4(s.fy0 + dy);
+      s.fx1 = this._r4(s.fx1 + dx); s.fy1 = this._r4(s.fy1 + dy);
+    }
+    if (s.pts) for (const pt of s.pts) { pt[1] = this._r4(pt[1] + dx); pt[2] = this._r4(pt[2] + dy); }
+  }
+  /* v204：複製選取（Doceri 式圈選複製貼上）——把目前套索選取的每一筆完整複製一份：
+     新 id、整體偏移 +0.03/+0.03（分數空間，clamp 不超出畫布），複製組成為新選取；
+     每筆走 _emit('add') 同一漏斗取得自己的 tlT 與時間軸事件（不複製段落標記 stops，
+     標記留在原筆）；復原一次整批退掉（undo 堆疊放一筆 {_dupUndo} 紀錄，比照 _moveUndo 慣例）。 */
+  duplicateSelection() {
+    const sel = this._lassoSel;
+    if (!sel || !sel.length) return [];
+    const pg = this.page;
+    let maxX = -1e9, maxY = -1e9;
+    for (const s of sel) {
+      const bb = this._strokeFracBBox(s);
+      if (bb) { if (bb.x1 > maxX) maxX = bb.x1; if (bb.y1 > maxY) maxY = bb.y1; }
+    }
+    const dx = Math.max(0, Math.min(0.03, 1 - maxX));
+    const dy = Math.max(0, Math.min(0.03, 1 - maxY));
+    const copies = [];
+    for (const s of sel) {
+      const c = JSON.parse(JSON.stringify(s));
+      for (const k of Object.keys(c)) if (k[0] === '_') delete c[k]; // 去暫存欄位（_orig*、_startPerf…）
+      delete c.tlT; // 走 _emit 重新蓋章，取得複製筆自己的時間點
+      c.id = this._strokeSeq++;
+      c.page = this.pageIndex;
+      this._shiftStrokeFrac(c, dx, dy);
+      copies.push(c);
+    }
+    for (const c of copies) {
+      pg.strokes.push(c);
+      this._emit('add', { page: this.pageIndex, stroke: c });
+    }
+    pg.redo.length = 0;
+    pg.undo.push({ _dupUndo: 1, strokes: copies });
+    this._lassoSel = copies;
+    if (typeof window !== 'undefined' && window._mokeUpdateRotateBtns) window._mokeUpdateRotateBtns();
+    this.render();
+    return copies;
+  }
+  /* v204：整批複製的復原/重做——只處理實際還在畫布上的複製筆（中途被刪/擦掉的不復活） */
+  _dupUndoStep(isUndo) {
+    const from = isUndo ? this.page.undo : this.page.redo;
+    const to = isUndo ? this.page.redo : this.page.undo;
+    const entry = from.pop();
+    if (!entry) return;
+    if (!entry._dupUndo) { from.push(entry); return; }
+    if (isUndo) {
+      const ids = new Set(entry.strokes.map(s => s.id));
+      const present = this.page.strokes.filter(s => ids.has(s.id));
+      this.page.strokes = this.page.strokes.filter(s => !ids.has(s.id));
+      for (const s of present) this._emit('unadd', { page: this.pageIndex, id: s.id });
+      to.push({ _dupUndo: 1, strokes: entry.strokes, _removedIds: present.map(s => s.id) });
+      if (this._lassoSel && this._lassoSel.some(s => ids.has(s.id))) {
+        this._lassoSel = this._lassoSel.filter(s => !ids.has(s.id));
+        if (!this._lassoSel.length) this._lassoSel = null;
+        if (typeof window !== 'undefined' && window._mokeUpdateRotateBtns) window._mokeUpdateRotateBtns();
+      }
+    } else {
+      const want = new Set(entry._removedIds || entry.strokes.map(s => s.id));
+      const back = entry.strokes.filter(s => want.has(s.id) && !this.page.strokes.some(x => x.id === s.id));
+      for (const s of back) {
+        this.page.strokes.push(s);
+        this._emit('readd', { page: this.pageIndex, id: s.id, stroke: s });
+      }
+      to.push({ _dupUndo: 1, strokes: entry.strokes });
+    }
+    this.render();
+  }
+
   _r4(v) { return Math.round(v * 10000) / 10000; } // 座標取小數4位，0.1px 精度，省一半空間
 
   /* v145：鋼筆筆壓 — 讀 PointerEvent.pressure（Apple Pencil 0..1；滑鼠按住時 0.5；
@@ -619,6 +709,7 @@ class Board {
   undo() {
     const top = this.page.undo[this.page.undo.length - 1];
     if (top && top._moveUndo) { this._moveUndoStep(this.page.undo, this.page.redo); return; }
+    if (top && top._dupUndo) { this._dupUndoStep(true); return; }
     const s = this.page.undo.pop();
     if (!s) return;
     this.page.strokes = this.page.strokes.filter(x => x.id !== s.id);
@@ -629,6 +720,7 @@ class Board {
   redo() {
     const top = this.page.redo[this.page.redo.length - 1];
     if (top && top._moveUndo) { this._moveUndoStep(this.page.redo, this.page.undo); return; }
+    if (top && top._dupUndo) { this._dupUndoStep(false); return; }
     const s = this.page.redo.pop();
     if (!s) return;
     this.page.strokes.push(s);
@@ -2017,20 +2109,54 @@ class Board {
   _drawBg(ctx, pg, W, H) {
     if (pg.bg === 'blackboard') {
       ctx.fillStyle = '#26382e'; ctx.fillRect(0, 0, W, H);
-    } else {
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
-      if (pg.bg === 'grid' || pg.bg === 'lines') {
-        ctx.strokeStyle = '#d7e3f4'; ctx.lineWidth = 1;
-        const step = 40;
-        ctx.beginPath();
-        if (pg.bg === 'grid') {
-          for (let x = step; x < W; x += step) { ctx.moveTo(x, 0); ctx.lineTo(x, H); }
-          for (let y = step; y < H; y += step) { ctx.moveTo(0, y); ctx.lineTo(W, y); }
-        } else {
-          for (let y = step; y < H; y += step) { ctx.moveTo(0, y); ctx.lineTo(W, y); }
-        }
-        ctx.stroke();
+      return;
+    }
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+    // v204：背景圖庫——新背景一律程序化繪製（不靠圖片檔）。底色皆為白，
+    // 線色沿用既有格線淡藍 #d7e3f4；座標紙的軸線用較深的藍灰，確保看得見。
+    if (pg.bg === 'grid' || pg.bg === 'gridfine' || pg.bg === 'lines' || pg.bg === 'axes') {
+      ctx.strokeStyle = '#d7e3f4'; ctx.lineWidth = 1;
+      const step = pg.bg === 'gridfine' ? 20 : 40;
+      ctx.beginPath();
+      if (pg.bg === 'lines') {
+        for (let y = step; y < H; y += step) { ctx.moveTo(0, y); ctx.lineTo(W, y); }
+      } else {
+        for (let x = step; x < W; x += step) { ctx.moveTo(x, 0); ctx.lineTo(x, H); }
+        for (let y = step; y < H; y += step) { ctx.moveTo(0, y); ctx.lineTo(W, y); }
       }
+      ctx.stroke();
+    }
+    if (pg.bg === 'axes') {
+      // 中央座標軸：原點在畫布中央，軸線較粗較深，四個端點都有箭頭
+      const cx = W / 2, cy = H / 2;
+      ctx.strokeStyle = '#5b7ba5'; ctx.fillStyle = '#5b7ba5'; ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(0, cy); ctx.lineTo(W, cy);
+      ctx.moveTo(cx, 0); ctx.lineTo(cx, H);
+      ctx.stroke();
+      const ah = 13, aw = 5.5; // 箭頭長／半寬
+      const tri = (x, y, dx, dy) => {
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x - dx * ah - dy * aw, y - dy * ah + dx * aw);
+        ctx.lineTo(x - dx * ah + dy * aw, y - dy * ah - dx * aw);
+        ctx.closePath(); ctx.fill();
+      };
+      tri(W, cy, 1, 0); tri(0, cy, -1, 0); tri(cx, 0, 0, -1); tri(cx, H, 0, 1);
+    }
+    if (pg.bg === 'staff') {
+      // 五線譜：五條一組、組間留空，往下重複
+      ctx.strokeStyle = '#aebfd6'; ctx.lineWidth = 1;
+      const gap = 10, pitch = gap * 4 + 60;
+      ctx.beginPath();
+      for (let y0 = 50; y0 < H; y0 += pitch) {
+        for (let i = 0; i < 5; i++) {
+          const y = y0 + i * gap;
+          if (y >= H) break;
+          ctx.moveTo(0, y); ctx.lineTo(W, y);
+        }
+      }
+      ctx.stroke();
     }
   }
 

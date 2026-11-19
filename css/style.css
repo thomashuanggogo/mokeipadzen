@@ -361,6 +361,43 @@ body.guest-mode #rec-controls { visibility: hidden; }
   display: flex; flex-direction: column; gap: 10px;
 }
 #color-pop #colors { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; }
+/* v204：背景選單 popover（比照 #color-pop 的 fixed 定位，避免被頂部列裁掉） */
+#bg-pop {
+  position: fixed; z-index: 1000;
+  background: #fff; border: 1px solid #dee2e6; border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.18); padding: 12px;
+}
+#bg-grid { display: grid; grid-template-columns: repeat(3, 78px); gap: 8px; }
+.bg-cell {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+  padding: 7px 4px 6px; border: 1.5px solid #dee2e6; border-radius: 9px;
+  background: #fff; cursor: pointer; color: #212529;
+}
+.bg-cell.active { border-color: #1971c2; background: #e8f1fa; }
+.bg-cell .bg-nm { font-size: 13px; font-weight: 600; line-height: 1.2; }
+.bg-prev { width: 64px; height: 40px; border: 1px solid #e9ecef; border-radius: 4px; background-color: #fff; }
+.bg-prev.p-white { background: #fff; }
+.bg-prev.p-blackboard { background: #26382e; }
+.bg-prev.p-grid { background-image:
+  repeating-linear-gradient(0deg, transparent 0, transparent 7px, #d7e3f4 7px, #d7e3f4 8px),
+  repeating-linear-gradient(90deg, transparent 0, transparent 7px, #d7e3f4 7px, #d7e3f4 8px); }
+.bg-prev.p-gridfine { background-image:
+  repeating-linear-gradient(0deg, transparent 0, transparent 3px, #d7e3f4 3px, #d7e3f4 4px),
+  repeating-linear-gradient(90deg, transparent 0, transparent 3px, #d7e3f4 3px, #d7e3f4 4px); }
+.bg-prev.p-lines { background-image:
+  repeating-linear-gradient(0deg, transparent 0, transparent 5px, #d7e3f4 5px, #d7e3f4 6px); }
+.bg-prev.p-axes { background-image:
+  linear-gradient(0deg, transparent calc(50% - 1px), #5b7ba5 calc(50% - 1px), #5b7ba5 calc(50% + 1px), transparent calc(50% + 1px)),
+  linear-gradient(90deg, transparent calc(50% - 1px), #5b7ba5 calc(50% - 1px), #5b7ba5 calc(50% + 1px), transparent calc(50% + 1px)),
+  repeating-linear-gradient(0deg, transparent 0, transparent 7px, #d7e3f4 7px, #d7e3f4 8px),
+  repeating-linear-gradient(90deg, transparent 0, transparent 7px, #d7e3f4 7px, #d7e3f4 8px); }
+.bg-prev.p-staff { background-image:
+  repeating-linear-gradient(0deg,
+    #aebfd6 0, #aebfd6 1px, transparent 1px, transparent 5px,
+    #aebfd6 5px, #aebfd6 6px, transparent 6px, transparent 10px,
+    #aebfd6 10px, #aebfd6 11px, transparent 11px, transparent 15px,
+    #aebfd6 15px, #aebfd6 16px, transparent 16px, transparent 20px,
+    #aebfd6 20px, #aebfd6 21px, transparent 21px, transparent 30px); }
 /* v163：手指落點補正量 popover（比照 #color-pop 的 fixed 定位，避免被工具列裁掉） */
 #lift-pop {
   position: fixed; z-index: 1000; width: 248px;
