@@ -17,6 +17,7 @@
     '課程': 'Lessons',
     '📂 課程檔案': '📂 Lessons',
     '課程檔案': 'Lessons',
+    '📝 載入編輯': '📝 Load & Edit',
     '貼紙': 'Stickers',
     '物理圖庫': 'Physics Library',
     '匯入 maker 匯出的 JSON': 'Import maker JSON',
@@ -383,6 +384,7 @@
     '已新增第 {n} 頁': 'Page {n} added',
     '確定刪除第 {n} 頁？': 'Delete page {n}?',
     '約 {kb} KB': '~{kb} KB',
+    ' · 約{kb}KB': ' · about {kb} KB',
     '第 {n} 頁': 'Page {n}',
     '第 {n} / {total} 頁': 'Page {n} / {total}',
     /* ===== 貼紙：零件名 ===== */

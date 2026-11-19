@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v204';
+const APP_VERSION = 'v205';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -979,6 +979,7 @@ function fsGuardExit() {
       const l = JSON.parse(text);
       if (!l.pages && !l.basePages) throw new Error('不是墨課課程檔');
       loadLessonToBoard(l);
+      updatePageLabel();
       await LessonStore.save(l);
       refreshLessonList();
       toast(window.t('⬆️ 已匯入：{title}', { title: l.title || window.t('課程') }));
@@ -1042,12 +1043,12 @@ function fsGuardExit() {
     for (const m of list) {
       const li = document.createElement('li');
       const d = new Date(m.created);
+      const durSeg = Number.isFinite(m.duration) ? ' ' + fmtTime(m.duration) : '';
       li.innerHTML = `<b>${escapeHtml(m.title)}</b>
-        <span class="meta">${d.getMonth() + 1}/${d.getDate()} ${fmtTime(m.duration)} · 約${m.kb}KB</span>`;
+        <span class="meta">${d.getMonth() + 1}/${d.getDate()}${durSeg}${window.t(' · 約{kb}KB', { kb: m.kb })}</span>`;
       const btns = document.createElement('span');
       const mk = (t, fn) => { const b = document.createElement('button'); b.textContent = t; b.onclick = () => fn(m.id); btns.appendChild(b); };
-      mk('▶ 重播', openPlayer);
-      mk('📝 載入編輯', async id => {
+      mk(window.t('📝 載入編輯'), async id => {
         const l = await LessonStore.get(id);
         loadLessonToBoard(l);
         $('modal-lessons').classList.add('hidden');
