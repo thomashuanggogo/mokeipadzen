@@ -457,7 +457,9 @@ class LessonEngine {
     }
     // v146：lockBg 頁筆跡改用底圖座標系（同 board.render）
     if (lockRect) { ctx.save(); ctx.translate(lockRect.x, lockRect.y); ctx.scale(lockRect.w / W, lockRect.h / H); }
-    for (const s of pg.strokes) {
+    // v207：圖層＝時間順序（同 board.render 的 _tlOrdered 規則；本路徑是課程播放器的
+    // 增量動畫繪製，原本照陣列順序，現對齊為照 tlT 描繪）
+    for (const s of board._tlOrdered(pg.strokes)) {
       const a = this.anims.get(s.id);
       const prog = a ? Math.min(1, (nowMs - a.start) / Math.max(1, s.dur || 300)) : 1;
       board.drawStroke(ctx, s, prog, W, H);
@@ -654,11 +656,13 @@ class TimelineController {
     if (!pg.tl) pg.tl = { events: [], stops: [], clock: null, unadded: [] };
     return pg.tl;
   }
-  /* 該頁時間軸終點＝最後一筆筆跡的 tlT */
+  /* 該頁時間軸終點＝最後一筆筆跡的 tlT
+     v207：筆跡貢獻改為 tlT＋sepAfter（與 board._liveEdgeT 同口徑）——頁尾最後一筆
+     若帶區隔旗標，liveEdge 含那段 TL_EPS，append 不吃掉區隔。 */
   liveEdge() {
     let m = 0;
     for (const s of this.board.page.strokes) {
-      const t = (s.tlT === undefined ? 0 : s.tlT);
+      const t = (s.tlT === undefined ? 0 : s.tlT) + (s.sepAfter || 0);
       if (t > m) m = t;
     }
     // v97：也要考慮被擦除筆跡的擦除時間，否則重播播不到擦除動作

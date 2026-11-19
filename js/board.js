@@ -4,6 +4,12 @@
  */
 'use strict';
 
+/* v207：時間軸區隔常數（ms）——插入筆跡與後方筆跡之間的最小間隔。
+ * 學長（Doceri 資深用戶）定版的不重疊不變量：時間軸上每個時段只容一筆，
+ * 穿插新筆跡時系統擠出 TL_EPS 做區隔（旗標 sepAfter 記在新筆上），
+ * 刪除該筆時連區隔一併回收。詳見 _insertYield / rippleCompact。 */
+const TL_EPS = 20;
+
 class Board {
   constructor(canvas, opts) {
     this.canvas = canvas;
@@ -403,7 +409,25 @@ class Board {
         // v47：回放中落筆，用 playhead 時間（需 app.js 設定 board._tlPlayhead）
         // v206：補筆改結束戳——tlT := 播放頭 + dur，全系統筆跡統一 [tlT−dur, tlT] 區間模型
         // （舊制 tlT=播放頭是開始戳，與其他筆跡的結束戳混用，補筆區間會凸出總長之外）。
-        if (this._tlPlayhead !== null && this._tlPlayhead !== undefined && type === 'add') {
+        // v207：補筆＝插入，必須讓位（不重疊不變量）——先由 _insertYield 解析有效插入點
+        // 並把後方筆跡推開 dur＋TL_EPS，新筆帶 sepAfter 旗標；游標接續時跨過區隔
+        // （_tlInsertNext = tlT + TL_EPS），刪除/復原時由 rippleCompact 連區隔回收，
+        // 任意插入/刪除順序下總長與各筆 tlT 分毫不差回到原值。
+        let insFlagged = false;
+        if (this._tlPlayhead !== null && this._tlPlayhead !== undefined && type === 'add'
+            && data && data.stroke && data.stroke.tlT === undefined) {
+          const D = Math.round(data.stroke.dur || 0);
+          const ins = this._insertYield(pg, Math.round(this._tlPlayhead), D, data.stroke);
+          t = ins.effP + D;
+          insFlagged = ins.flagged;
+          if (insFlagged) {
+            data.stroke.sepAfter = TL_EPS;
+            // v207：實際位移量一併記下（sepYield）——插入點前若本來有間隙 g，
+            // shift = D + TL_EPS − g < D + TL_EPS；刪除回收必須照實際位移量，
+            // 否則每插刪一輪就漂移 g（實測天然間隙 1ms → 回復差 1ms）。
+            data.stroke.sepYield = ins.shift;
+          }
+        } else if (this._tlPlayhead !== null && this._tlPlayhead !== undefined && type === 'add') {
           t = Math.round(this._tlPlayhead) + Math.round((data && data.stroke && data.stroke.dur) || 0);
         }
         if (type === 'add' && data && data.stroke && data.stroke.tlT === undefined) {
@@ -414,8 +438,9 @@ class Board {
         }
         // v175：補線游標接續——同一播放頭的下一筆接在這一筆後面
         // v206：游標＝本筆的結束戳（與 tlT 同值），接續語意不變
+        // v207：有區隔旗標時游標跨過 TL_EPS，下一筆接在區隔之後（與刪除回收的數學對稱）
         if (type === 'add' && this._tlPlayhead !== null && this._tlPlayhead !== undefined) {
-          this._tlInsertNext = t;
+          this._tlInsertNext = t + (insFlagged ? TL_EPS : 0);
         }
         tl.events.push({ t, evt: type, data: data || {} });
       }
@@ -429,6 +454,80 @@ class Board {
       if (v !== null && v !== undefined) return Math.round(v);
     }
     return Math.round(this._liveEdgeT());
+  }
+
+  /* v207：插入讓位（不重疊不變量的核心）——要在時間點 p 插入總長 D 的新筆跡（或整批）時：
+   * 1) 有效插入點 effP：若 p 落在某筆區間內部（start < p < end），改用該筆的區間終點
+   *    （再加該筆的 sepAfter，若有）；多筆重疊包含 p 時取最晚的終點。
+   * 2) 後方筆跡（區間起點 >= effP，不限類型）的最早起點 nextStart 決定位移量：
+   *    shift = max(0, effP + D + TL_EPS - nextStart)；後方無筆＝append，不位移、不打旗標。
+   * 3) 位移同步套用到：後方筆跡的 tlT、已擦除紀錄（eraseT 保持＝該筆 tlT）、
+   *    參照到被位移筆跡的事件 t。段落標記綁 strokeId、讀取時由 tlT 推導，自動跟隨。
+   * 回傳 { effP, shift, flagged, ids }：ids＝被位移的既有筆跡 id（貼上整批復原要用）。 */
+  _insertYield(pg, p, D, exclude) {
+    const iv = s => {
+      const end = s.tlT || 0;
+      return [end - (s.dur || 300), end];
+    };
+    let effP = p;
+    for (const s of pg.strokes) {
+      if (s === exclude) continue;
+      const [a, b] = iv(s);
+      if (a < p && p < b) effP = Math.max(effP, b + (s.sepAfter || 0));
+    }
+    let nextStart = Infinity;
+    for (const s of pg.strokes) {
+      if (s === exclude) continue;
+      const [a] = iv(s);
+      if (a >= effP && a < nextStart) nextStart = a;
+    }
+    if (nextStart === Infinity) return { effP, shift: 0, flagged: false, ids: [] };
+    const shift = Math.max(0, effP + D + TL_EPS - nextStart);
+    const ids = [];
+    if (shift > 0) {
+      const idSet = new Set();
+      for (const s of pg.strokes) {
+        if (s === exclude) continue;
+        const [a] = iv(s);
+        if (a >= effP) { idSet.add(s.id); ids.push(s.id); }
+      }
+      // 已擦除的筆跡不在 pg.strokes 裡，但它的 eraseT 參與 liveEdge，位移集合要一併納入
+      if (pg.tl && pg.tl.erased) {
+        for (const e of pg.tl.erased) {
+          const [a] = iv(e.stroke);
+          if (a >= effP && !idSet.has(e.stroke.id)) { idSet.add(e.stroke.id); ids.push(e.stroke.id); }
+        }
+      }
+      this._applyYieldDelta(pg, idSet, shift);
+    }
+    return { effP, shift, flagged: true, ids };
+  }
+
+  /* v207：把一組筆跡（idSet）的時間軸位置整體平移 delta——筆跡 tlT、已擦除紀錄、
+   * 參照到這些筆跡的事件 t 一起動，頁面時鐘 base 同步到 liveEdge。
+   * _insertYield 用 +shift 讓位；貼上整批的復原/重做用 ∓shift 精確反向/重放。 */
+  _applyYieldDelta(pg, idSet, delta) {
+    if (!delta) return;
+    for (const s of pg.strokes) {
+      if (idSet.has(s.id)) s.tlT = (s.tlT || 0) + delta;
+    }
+    if (pg.tl && pg.tl.erased) {
+      for (const e of pg.tl.erased) {
+        if (idSet.has(e.stroke.id)) { e.stroke.tlT = (e.stroke.tlT || 0) + delta; e.eraseT = e.stroke.tlT; }
+      }
+    }
+    if (pg.tl && pg.tl.events) {
+      for (const ev of pg.tl.events) {
+        const d = ev.data || {};
+        const sid = (d.stroke && d.stroke.id !== undefined) ? d.stroke.id : d.id;
+        if (sid !== undefined && idSet.has(sid)) ev.t += delta;
+        else if (Array.isArray(d.ids) && d.ids.some(id => idSet.has(id))) ev.t += delta;
+      }
+    }
+    if (pg.tl && pg.tl.clock) {
+      pg.tl.clock.base = Math.round(this._liveEdgeT());
+      if (pg.tl.clock.running) pg.tl.clock.t0 = performance.now();
+    }
   }
 
   _newStroke(tool, extra) {
@@ -483,6 +582,8 @@ class Board {
       for (const k of Object.keys(c)) if (k[0] === '_') delete c[k];
       delete c.tlT;
       delete c.id;
+      delete c.sepAfter;   // v207：區隔旗標是原頁的插入帳目，不跟著筆跡走（貼上時由插入邏輯重新決定）
+      delete c.sepYield;
       return c;
     });
     this._pasteSeq = 0;   // 重新複製→累進偏移從頭算
@@ -491,7 +592,11 @@ class Board {
   clipboardCount() { return this._clipboard ? this._clipboard.length : 0; }
   /* v206：把剪貼簿貼到目前頁——新 id、整體偏移 0.03×次數（分數空間，clamp 不超出畫布），
      貼上組成為新選取；每筆走不計時 _emit('add')：tlT 蓋目標頁 liveEdge/播放頭戳、dur 保留
-     （Doceri 模型：複製貼上不佔時間）；復原一次整批退掉（{_dupUndo} 紀錄，同 v204 慣例）。 */
+     （Doceri 模型：複製貼上不佔時間）；復原一次整批退掉（{_dupUndo} 紀錄，同 v204 慣例）。
+     v207：回放中（播放頭不在末端）貼上＝插入，整批視為一個插入單位：先 _insertYield 讓位，
+     整批依剪貼簿順序首尾相接佈置（批總長 D＝各筆 dur 總和），最後一筆帶 sepAfter: TL_EPS；
+     讓位紀錄（shift＋被位移筆 id）存進 _dupUndo 筆記，整批復原/重做時精確反向/重放位移。
+     append 到 liveEdge（後方無筆）維持 v206 行為：不讓位、不打旗標、各筆同蓋 liveEdge 戳。 */
   pasteClipboard() {
     if (!this._clipboard || !this._clipboard.length) return [];
     const pg = this.page;
@@ -508,15 +613,35 @@ class Board {
       const c = JSON.parse(JSON.stringify(src));
       c.id = this._strokeSeq++;
       c.page = this.pageIndex;
+      delete c.sepAfter;   // v207：旗標只由本次插入邏輯決定（見下）
+      delete c.sepYield;
       this._shiftStrokeFrac(c, dx, dy);
       return c;
     });
+    // v207：插入判定——onUntimedStamp 有給播放頭（回放中）才可能是插入；append 走 v206 原路
+    let ins = null;
+    if (typeof this.onUntimedStamp === 'function') {
+      const v = this.onUntimedStamp();
+      if (v !== null && v !== undefined) {
+        const D = copies.reduce((a, c) => a + (c.dur || 300), 0);
+        const y = this._insertYield(pg, Math.round(v), D, null);
+        if (y.flagged) {
+          ins = y;
+          let cur = y.effP;
+          for (const c of copies) { cur += (c.dur || 300); c.tlT = cur; }
+          copies[copies.length - 1].sepAfter = TL_EPS;
+          copies[copies.length - 1].sepYield = y.shift;   // v207：實際位移量，刪除時精確回收
+        }
+      }
+    }
     for (const c of copies) {
       pg.strokes.push(c);
       this._emit('add', { page: this.pageIndex, stroke: c }, true);
     }
     pg.redo.length = 0;
-    pg.undo.push({ _dupUndo: 1, strokes: copies });
+    const entry = { _dupUndo: 1, strokes: copies };
+    if (ins) { entry._yieldShift = ins.shift; entry._yieldIds = ins.ids; entry._yieldApplied = ins.shift > 0; }
+    pg.undo.push(entry);
     this._lassoSel = copies;
     if (typeof window !== 'undefined' && window._mokeUpdateRotateBtns) window._mokeUpdateRotateBtns();
     this.render();
@@ -541,7 +666,15 @@ class Board {
       const present = this.page.strokes.filter(s => ids.has(s.id));
       this.page.strokes = this.page.strokes.filter(s => !ids.has(s.id));
       for (const s of present) this._emit('unadd', { page: this.pageIndex, id: s.id }, true); // v206：不計時
-      to.push({ _dupUndo: 1, strokes: entry.strokes, _removedIds: present.map(s => s.id) });
+      // v207：整批是插入單位時，復原要把當初的讓位位移精確反向（複製筆已被其他路徑刪掉時
+      // 不重複反向——那份位移已由 rippleCompact 在刪除時回收）
+      let yieldApplied = !!entry._yieldApplied;
+      if (yieldApplied && present.length) {
+        this._applyYieldDelta(this.page, new Set(entry._yieldIds || []), -(entry._yieldShift || 0));
+        yieldApplied = false;
+      }
+      to.push({ _dupUndo: 1, strokes: entry.strokes, _removedIds: present.map(s => s.id),
+                _yieldShift: entry._yieldShift, _yieldIds: entry._yieldIds, _yieldApplied: yieldApplied });
       if (this._lassoSel && this._lassoSel.some(s => ids.has(s.id))) {
         this._lassoSel = this._lassoSel.filter(s => !ids.has(s.id));
         if (!this._lassoSel.length) this._lassoSel = null;
@@ -554,7 +687,14 @@ class Board {
         this.page.strokes.push(s);
         this._emit('readd', { page: this.pageIndex, id: s.id, stroke: s }, true); // v206：不計時
       }
-      to.push({ _dupUndo: 1, strokes: entry.strokes });
+      // v207：重做把複製筆放回時，當初的讓位位移一併重放（與復原的反向對稱）
+      let yieldApplied = !!entry._yieldApplied;
+      if (!yieldApplied && back.length && entry._yieldShift) {
+        this._applyYieldDelta(this.page, new Set(entry._yieldIds || []), entry._yieldShift);
+        yieldApplied = true;
+      }
+      to.push({ _dupUndo: 1, strokes: entry.strokes,
+                _yieldShift: entry._yieldShift, _yieldIds: entry._yieldIds, _yieldApplied: yieldApplied });
     }
     this.render();
   }
@@ -610,12 +750,24 @@ class Board {
      v174：墨課沒有錄音功能（2026-11-13 拍板不做、2026-11-16 南勛重申），不需護欄，無條件補位。
      v206：區間模型修正——tlT 是「結束戳」，筆跡真實區間是 [tlT−dur, tlT]；
      舊制用 [tlT, tlT+dur]（開始戳模型）算，刪一筆後，凡在被刪筆 dur 內畫完的後續筆跡
-     都會被 shift() 精確塌陷到被刪筆的 tlT 上（重播時整批同時冒出＝學長的「筆跡錯亂」）。 */
+     都會被 shift() 精確塌陷到被刪筆的 tlT 上（重播時整批同時冒出＝學長的「筆跡錯亂」）。
+     v207：被刪筆若帶 sepAfter（插入時打的區隔旗標），區隔連帶回收——移除跨度
+     ＝ [區間起點, 起點＋sepYield]：sepYield 是插入當下實際造成的位移量
+     （D + TL_EPS − 插入點前的既有間隙），照它回收才能分毫不差回到插入前
+     （只用 tlT＋sepAfter 會多回收那段既有間隙）。無 sepYield 的帶旗標筆退回
+     tlT＋sepAfter；未帶旗標者維持 v206 行為，只扣 dur。三條刪除路徑
+     （抽屜多選刪、套索 ✕、橡皮擦）共用本函式，一處全通。 */
   rippleCompact(removed) {
     if (!removed || !removed.length) return;
     const pg = this.page;
     const spans = removed
-      .map(s => [Math.max(0, (s.tlT || 0) - (s.dur || 300)), s.tlT || 0])
+      .map(s => {
+        const a = Math.max(0, (s.tlT || 0) - (s.dur || 300));
+        const b = (s.sepYield !== undefined && s.sepYield !== null)
+          ? a + s.sepYield
+          : (s.tlT || 0) + (s.sepAfter || 0);
+        return [a, b];
+      })
       .sort((a, b) => a[0] - b[0]);
     if (!spans.length) return;
     const merged = [spans[0].slice()];
@@ -793,6 +945,9 @@ class Board {
     this.page.strokes = this.page.strokes.filter(x => x.id !== s.id);
     this.page.redo.push(s);
     this._emit('unadd', { page: this.pageIndex, id: s.id }, true);  // v25：復原＝從時間軸移除該筆（同步刪除它的時間）；v206：不計時（復原不喚醒時鐘）
+    // v207：復原的若是插入筆（帶 sepAfter），它當初推開的後方筆跡要一併收回——
+    // 走 rippleCompact（跨度照 sepYield 精確回收），與刪除路徑同一套回收數學。
+    if (s.sepAfter) this.rippleCompact([s]);
     this.render();
   }
   redo() {
@@ -801,6 +956,12 @@ class Board {
     if (top && top._dupUndo) { this._dupUndoStep(false); return; }
     const s = this.page.redo.pop();
     if (!s) return;
+    // v207：重做的若是插入筆，先在它的原插入點重放讓位（後方筆跡推開 dur+TL_EPS），
+    // 再把筆放回——與 undo 的 ripple 回收對稱，數值分毫不差。
+    if (s.sepAfter) {
+      const y = this._insertYield(this.page, (s.tlT || 0) - (s.dur || 300), Math.round(s.dur || 0), s);
+      if (y.flagged) s.sepYield = y.shift;   // 版面已精確還原，重算值應與原值相同，一併刷新
+    }
     this.page.strokes.push(s);
     // v96：重做恢復被擦除的筆跡時，從 erased 記錄移除（避免重播時重複繪製）
     if (this.page.tl && this.page.tl.erased) {
@@ -2121,11 +2282,19 @@ class Board {
       window._mokeToast(hit.shape === 'ellipse' ? '⭕ 已辨識為圓形' : '➖ 已辨識為直線', 1800);
     }
   }
-  /* v103：供 _up 暫停時取得最後事件時間（與 TLC.liveEdge 一致） */
+  /* v207：時間順序的筆跡清單（複本）——照 tlT 由小到大穩定排序（同 tlT 保持原陣列
+     順序）；描繪專用，不動儲存陣列本體。所有描繪路徑共用這一條順序規則。 */
+  _tlOrdered(strokes) {
+    return strokes.slice().sort((a, b) => ((a.tlT || 0) - (b.tlT || 0)));
+  }
+
+  /* v103：供 _up 暫停時取得最後事件時間（與 TLC.liveEdge 一致）
+     v207：筆跡貢獻改為 tlT＋sepAfter——頁尾最後一筆若帶區隔旗標，liveEdge 含那段
+     TL_EPS，之後的 append 從區隔之後起算，不會把區隔吃掉。 */
   _liveEdgeT() {
     let m = 0;
     for (const s of this.page.strokes) {
-      const t = (s.tlT === undefined ? 0 : s.tlT);
+      const t = (s.tlT === undefined ? 0 : s.tlT) + (s.sepAfter || 0);
       if (t > m) m = t;
     }
     const tl = this.page.tl;
@@ -2292,7 +2461,9 @@ class Board {
     const lockIm = pg.lockBg ? this._migrateImages(pg)[0] : null;
     const lockB = lockIm ? this._imgBounds(lockIm) : null;
     if (lockB) { ctx.save(); ctx.translate(lockB.x0, lockB.y0); ctx.scale((lockB.x1 - lockB.x0) / W, (lockB.y1 - lockB.y0) / H); }
-    for (const s of pg.strokes) {
+    // v207：圖層＝時間順序——描繪照 tlT 由小到大（穩定排序，同 tlT 以原陣列順序為準），
+    // 不重排儲存陣列本體。後寫的筆蓋在先寫的之上，與 Doceri 的串流順序一致。
+    for (const s of this._tlOrdered(pg.strokes)) {
       // v47：時間軸回放時只顯示 cutoff 之前的筆跡
       if (this.tlCutoff !== null && this.tlCutoff !== undefined) {
         const st = (s.tlT === undefined ? 0 : s.tlT);
@@ -2302,8 +2473,11 @@ class Board {
     }
     if (lockB) ctx.restore();
     // v96：重播時顯示「曾存在但已被擦除」的筆跡（擦除時間 > cutoff 才顯示）
+    // v207：這批覆蓋層同樣照 tlT 排序（穩定排序），與主描繪同一順序規則
     if (this.tlCutoff !== null && this.tlCutoff !== undefined && pg.tl && pg.tl.erased) {
-      for (const { stroke: s, eraseT } of pg.tl.erased) {
+      const erasedOrdered = pg.tl.erased.slice()
+        .sort((a, b) => ((a.stroke.tlT || 0) - (b.stroke.tlT || 0)));
+      for (const { stroke: s, eraseT } of erasedOrdered) {
         const st = (s.tlT === undefined ? 0 : s.tlT);
         if (st <= this.tlCutoff && eraseT > this.tlCutoff) {
           this.drawStroke(ctx, s, 1, W, H);

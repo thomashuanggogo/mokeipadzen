@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v206';
+const APP_VERSION = 'v207';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -1558,7 +1558,13 @@ function fsGuardExit() {
     if (!TLC.active) { board._tlPlayhead = null; return; }
     if (TLC.playing) TLC.pause();
     if (TLC.isLive()) { board._tlPlayhead = null; board._tlInsertFor = null; return; }
-    if (board._tlInsertFor !== TLC.playhead) {
+    // v207：游標有效性——_tlInsertNext 若已超出本頁 liveEdge，代表它指的位置
+    // 已被刪除/復原消滅（時間軸縮短），視同換位置重置；否則新筆會被蓋到
+    // liveEdge 之外：不讓位、沒區隔旗標，時間軸多出一段死空檔。
+    const edgeNow = Math.round(board._liveEdgeT());
+    if (board._tlInsertFor !== TLC.playhead
+        || board._tlInsertNext === null || board._tlInsertNext === undefined
+        || board._tlInsertNext > edgeNow) {
       board._tlInsertFor = TLC.playhead;
       board._tlInsertNext = Math.max(1, Math.round(TLC.playhead));
       toast('✏️ 在此處補線：新筆插在播放頭的位置', 1800);
