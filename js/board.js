@@ -494,7 +494,23 @@ class Board {
   _hitStroke(s, x, y) {
     const W = this._cssW, H = this._cssH;
     const tol = Math.max(14, s.width * (W / 1000) + 8);
-    if (s.tool === 'sticker') return false; // v195：貼紙是整張圖，橡皮擦擦不掉（要刪用選取＋✕，整張刪）
+    if (s.tool === 'sticker') {
+      // v202：橡皮擦對貼紙比照圖形（南勛：貼紙跟圖形同等待遇）——
+      // 點落在貼紙範圍內（含 rot 旋轉後的四角）或距邊線 tol 內，整張擦掉（跟圖形整筆移除一致）。
+      const cxp = s.fx * W, cyp = s.fy * H;
+      const hw = s.fw / 2 * W, hh = s.fh / 2 * H;
+      const rot = (s.rot || 0) * Math.PI / 180;
+      const cos = Math.cos(rot), sin = Math.sin(rot);
+      const cs = [[-hw, -hh], [hw, -hh], [-hw, hh], [hw, hh]]
+        .map(([dx, dy]) => ({ x: cxp + dx * cos - dy * sin, y: cyp + dx * sin + dy * cos }));
+      const quad = [cs[0], cs[1], cs[3], cs[2]];
+      if (this._pointInPoly(x, y, quad)) return true;
+      for (let i = 0; i < 4; i++) {
+        const a = quad[i], b = quad[(i + 1) % 4];
+        if (this._distToSeg(x, y, a.x, a.y, b.x, b.y) < tol) return true;
+      }
+      return false;
+    }
     if (s.tool === 'text') {
       const sx = s.fx * W, sy = s.fy * H;
       return Math.hypot(x - sx, y - sy) < Math.max(30, s.size * (W / 1000));

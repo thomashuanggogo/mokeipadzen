@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v201';
+const APP_VERSION = 'v202';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -585,8 +585,61 @@ function fsGuardExit() {
   };
   $('btn-img-adjust').onclick = enterImgAdjust;
 
-  /* v201（南勛 2026-11-18 指示）：貼紙功能整個拿掉 — 他對圖庫圖片不滿意（有些圖不完整、中文標示不清楚），之後再議。
-     面板／貼上／maker 匯入的程式碼在 git tag v200 還找得到；board.js 的 sticker 筆跡支援保留，舊課已貼的貼紙仍可顯示、選取、刪除。 */
+  /* ----- v202：物理圖庫貼紙回歸（南勛 2026-11-19 定版）— 第二欄「貼紙」區 -----
+     圖庫換成 Gemini 繪製、逐張驗收通過的 SVG 共 111 張（資料在 js/stickers.js：MOKE_STICKERS）。
+     貼紙本身跟圖形一樣：board.addSticker 建一筆 tool:'sticker' 筆跡，走 addStroke 同一條路 —
+     有自己的 tlT 與時間軸事件、回放依 tlCutoff 出現、套索選取/移動/旋轉、✕ 刪除走漣波、橡皮擦比照圖形。
+     不是底圖：不進 images 底圖層、不進圖片調整模式。 */
+  const stickerLib = window.MOKE_STICKERS || null;
+  const STICKER_GROUPS = window.MOKE_STICKER_GROUPS || [];
+  let stickerCat = STICKER_GROUPS[0];
+  function renderStickerTabs() {
+    const tabs = $('sticker-tabs');
+    tabs.innerHTML = '';
+    for (const g of STICKER_GROUPS) {
+      const b = document.createElement('button');
+      b.textContent = window.t(g);
+      b.classList.toggle('active', g === stickerCat);
+      b.onclick = () => { stickerCat = g; renderStickerTabs(); renderStickerGrid(); };
+      tabs.appendChild(b);
+    }
+  }
+  function renderStickerGrid() {
+    const grid = $('sticker-grid');
+    grid.innerHTML = '';
+    if (!stickerLib) return;
+    for (const item of stickerLib.filter(it => it.group === stickerCat)) {
+      const cell = document.createElement('button');
+      cell.className = 'sticker-cell';
+      const img = document.createElement('img');
+      img.src = item.src;
+      img.alt = item.name;
+      cell.appendChild(img);
+      const nm = document.createElement('span');
+      nm.textContent = window.t(item.name);
+      cell.appendChild(nm);
+      cell.onclick = () => stampSticker(item);
+      grid.appendChild(cell);
+    }
+  }
+  /* 貼上＝建一筆圖形物件（跟三角形同規格），貼完自動選取，
+     拖中心把手就能移、角落把手旋轉、第二排 ✕ 刪除 */
+  function stampSticker(item) {
+    const targetW = Math.max(180, Math.min(440, board._cssW * 0.36)); // 貼上後的顯示寬度（px）
+    const targetH = targetW * (item.h / item.w);
+    const s = board.addSticker(item.src, board._cssW / 2, board._cssH / 2, targetW, targetH);
+    $('modal-stickers').classList.add('hidden');
+    board._lassoSel = [s];
+    if (window._mokeUpdateRotateBtns) window._mokeUpdateRotateBtns();
+    board.render();
+    toast(window.t('已貼上「{name}」：拖中心把手移位置、角落把手旋轉、第二排 ✕ 刪除', { name: window.t(item.name) }), 3500);
+  }
+  $('btn-stickers').onclick = () => {
+    if (!stickerLib) { toast('物理圖庫載入失敗'); return; }
+    renderStickerTabs();
+    renderStickerGrid();
+    $('modal-stickers').classList.remove('hidden');
+  };
   $('btn-img-done').onclick = () => {
     if (board.cropMode) {
       if (board.applyCrop()) {
