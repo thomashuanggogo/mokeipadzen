@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v202';
+const APP_VERSION = 'v203';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -910,12 +910,19 @@ function fsGuardExit() {
   }
   // 匯出課程檔（JSON 備份，含每頁筆跡＋時間軸＋標記）
   $('btn-export-lesson').onclick = () => {
-    const pages = board.pages.map(p => ({
-      bg: p.bg, image: p.image || null, lockBg: !!p.lockBg,
-      imgS: p.imgS || 1, imgX: p.imgX || 0, imgY: p.imgY || 0,
-      strokes: p.strokes,
-      stops: (p.tl ? p.tl.stops : []).map(m => ({ id: m.id, strokeId: m.strokeId, label: m.label }))
-    }));
+    // v203：每頁先正規化（底圖搬進 images[]），image 與 images 併寫——
+    // v202 以前只寫 image，從備份匯入的課程 image 已被搬空，再匯出就漏光底圖（學長回報）。
+    const pages = board.pages.map(p => {
+      const imgs = board._migrateImages(p);
+      return {
+        bg: p.bg, image: p.image || null,
+        images: imgs.map(im => ({ id: im.id, src: im.src, x: im.x || 0, y: im.y || 0, s: im.s || 1 })),
+        lockBg: !!p.lockBg,
+        imgS: p.imgS || 1, imgX: p.imgX || 0, imgY: p.imgY || 0,
+        strokes: p.strokes,
+        stops: (p.tl ? p.tl.stops : []).map(m => ({ id: m.id, strokeId: m.strokeId, label: m.label }))
+      };
+    });
     const lesson = {
       id: 'L' + Date.now(), title: '白板備份 ' + new Date().toLocaleString(),
       created: Date.now(), pages, v: 47

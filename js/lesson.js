@@ -325,9 +325,10 @@ const LessonStore = {
       rq.onsuccess = () => {
         const arr = (rq.result || []).map(l => ({
           id: l.id, title: l.title, created: l.created, duration: l.duration,
-          kb: Math.round(JSON.stringify(l.basePages).length / 1024 +
-            l.events.reduce((a, e) => a + JSON.stringify(e).length, 0) / 1024 +
-            l.audio.reduce((a, s) => a + (s.blob ? s.blob.size : 0), 0) / 1024)
+          // v203：v47 備份格式課程沒有 basePages/events/audio，缺值要防護（原本會丟 TypeError）
+          kb: Math.round(((l.basePages ? JSON.stringify(l.basePages).length : (l.pages ? JSON.stringify(l.pages).length : 0)) +
+            (l.events || []).reduce((a, e) => a + JSON.stringify(e).length, 0) +
+            (l.audio || []).reduce((a, s) => a + (s.blob ? s.blob.size : 0), 0)) / 1024)
         }));
         arr.sort((a, b) => b.created - a.created);
         res(arr);
