@@ -16,6 +16,12 @@ class Board {
     this.width = 5;
     this.textSize = 48;
     this.onEvent = null;          // (type, data) => void，由 app.js 接錄影
+    this.onUntimedStamp = null;   // v206：不計時事件的戳記來源（app.js 提供：回放中回傳播放頭，否則 null→用 liveEdge）
+    this._clipboard = null;       // v206：筆跡剪貼簿（深拷貝，跨頁存活；複製鈕/貼上鈕用）
+    this._pasteSeq = 0;           // v206：連續貼上的累進偏移計數（重新複製時歸零）
+    this._selBase = null;         // v206：選取手勢（捏合/縮放）的起始快照，_selGestureBegin/End 管理
+    this._selBaseCenter = null;   // v206：選取手勢的包圍盒中心（畫布 px）
+    this._selCleared = null;      // v206：pen 落筆時被 v147 先清掉的選取（雙指成立時還原改走選取捏合）
     this.onDrawStart = null;      // 落筆前鉤子（時間軸：回放中落筆＝插入）
     this.onDrawEnd = null;        // 提筆後鉤子
     this.tlCutoff = null;         // v47：時間軸回放過濾（null＝全顯示，否則只畫 tlT <= cutoff 的筆跡）
@@ -206,7 +212,7 @@ class Board {
       im.x = ccx - W / 2;
       im.y = ccy - H / 2;
       im.s = oldS;
-      this._emit('image', { page: this.pageIndex, action: 'crop', id: im.id });
+      this._emit('image', { page: this.pageIndex, action: 'crop', id: im.id }, true); // v206：不計時
       this.render();
     };
     newImg.src = newSrc;
@@ -227,7 +233,7 @@ class Board {
     pg.image = imageDataUrl || null;
     this.pages.splice(index, 0, pg);
     if (index <= this.pageIndex) this.pageIndex++;
-    if (record) this._emit('addpage', { page: index, bg: pg.bg, image: imageDataUrl || null });
+    if (record) this._emit('addpage', { page: index, bg: pg.bg, image: imageDataUrl || null }, true); // v206：不計時
     this.render();
     return index;
   }
@@ -236,22 +242,22 @@ class Board {
     const idx = this.pageIndex;
     this.pages.splice(idx, 1);
     if (this.pageIndex >= this.pages.length) this.pageIndex = this.pages.length - 1;
-    this._emit('delpage', { page: idx });
-    this._emit('page', { page: this.pageIndex });
+    this._emit('delpage', { page: idx }, true); // v206：不計時
+    this._emit('page', { page: this.pageIndex }, true);
     this.render();
   }
   gotoPage(i) {
     i = Math.max(0, Math.min(this.pages.length - 1, i));
     if (i === this.pageIndex) return;
     this.pageIndex = i;
-    this._emit('page', { page: i });
+    this._emit('page', { page: i }, true); // v206：不計時（換頁不該在新頁建立/喚醒時鐘）
     this.render();
   }
 
   /* ---------- 背景 / 底圖 ---------- */
   setBackground(bg) {
     this.page.bg = bg;
-    this._emit('bg', { page: this.pageIndex, bg });
+    this._emit('bg', { page: this.pageIndex, bg }, true); // v206：不計時
     this.render();
   }
   setImage(dataUrl) {
@@ -267,7 +273,7 @@ class Board {
       src: dataUrl, x: 0, y: 0, s: 1, _el: null
     };
     imgs.push(im);
-    this._emit('image', { page: this.pageIndex, action: 'add', id: im.id });
+    this._emit('image', { page: this.pageIndex, action: 'add', id: im.id }, true); // v206：不計時（Doceri 貼圖不計時）
     this.ensureImage(pg, im, () => this.render());
     this.render();
     return im;
@@ -289,7 +295,7 @@ class Board {
       fw: this._r4(wPx / spanX), fh: this._r4(hPx / spanY),
       rot: 0, dur: 300, pts: []
     });
-    return this.addStroke(s);
+    return this.addStroke(s, true, true); // v206：貼紙不計時（Doceri 模型），tlT 蓋 liveEdge/播放頭戳
   }
   /* v195：貼紙圖片元素（載入後自動重繪；快取不進存檔） */
   _stickerEl(s) {
@@ -310,7 +316,7 @@ class Board {
     const i = imgs.findIndex(im => im.id === id);
     if (i >= 0) {
       imgs.splice(i, 1);
-      this._emit('image', { page: this.pageIndex, action: 'remove', id });
+      this._emit('image', { page: this.pageIndex, action: 'remove', id }, true); // v206：不計時
       this.render();
       return true;
     }
@@ -321,7 +327,7 @@ class Board {
     this._migrateImages(pg);
     pg.images = [];
     pg.image = null;
-    this._emit('image', { page: this.pageIndex, dataUrl: null });
+    this._emit('image', { page: this.pageIndex, dataUrl: null }, true); // v206：不計時
     this.render();
   }
 
@@ -343,45 +349,86 @@ class Board {
   /* ---------- 筆跡操作 ---------- */
   /* v47：每頁獨立時間軸。事件寫入當頁的 tl.events，時間是該頁時鐘（第一筆為 00:00）。
    * 不再經由全域 SessionLog，不再需要 page 標籤。
-   * 回放中落筆（TLC.active 且不在 live）：用 playhead 時間，讓筆跡落在回放位置。 */
-  _emit(type, data) {
+   * 回放中落筆（TLC.active 且不在 live）：用 playhead 時間，讓筆跡落在回放位置。
+   * v206：事件分兩類（Doceri 計時模型）——
+   * 計時類（untimed 省略/false）：筆/螢光筆/圖形工具的書寫、橡皮擦、播放頭補筆。
+   *   只有它們能建立/喚醒頁面時鐘、推進時間軸。
+   * 不計時類（untimed=true）：貼紙、圖片、文字、複製/貼上產物、移動/旋轉/縮放調整、
+   *   復原/重做、圖形辨識替換、換頁/背景/增刪頁。永不建立時鐘、永不 resume 時鐘；
+   *   需要 tlT 的物件蓋 liveEdge 戳（回放中且播放頭不在末端時取播放頭，經 onUntimedStamp），
+   *   不佔用、不平移任何時間。此分流修掉舊制的「時鐘洩漏」：非手勢 _emit 喚醒時鐘後
+   *   無人暫停，下一筆把真實秒數吞進 tlT，在末端長出幽靈時間軸。 */
+  _emit(type, data, untimed) {
     const pg = this.page;
     if (pg && pg.tl) {
       const tl = pg.tl;
-      if (!tl.clock) {
-        tl.clock = new LessonClock();
-        tl.clock.start();
-      }
-      let t = Math.round(tl.clock.now());
-      // v99：時間戳最小為 1，避免 tlT=0 在 cutoff=0 時被顯示（拉到最前應為空白）
-      if (t < 1) t = 1;
-      // v172：新事件不得早於本頁結尾——轉檔課舊筆跡自帶 Doceri 原始時間，
-      // 本機時鐘卻從 0 起算，不夾住的話新筆會被蓋到時間軸最前面（兩套時間）。
-      if ((type === 'add' || type === 'erase') && (this._tlPlayhead === null || this._tlPlayhead === undefined)) {
-        const edge = Math.round(this._liveEdgeT());
-        if (t < edge) {
-          t = edge;
-          tl.clock.base = edge;
-          if (tl.clock.running) tl.clock.t0 = performance.now();
-        }
-      }
       // v101：任何時間軸事件都算動作（復原/重做按鈕不走 _down，這裡補上）
       this._lastActivity = performance.now();
-      if (tl.clock && !tl.clock.running) tl.clock.resume();
-      // v47：回放中落筆，用 playhead 時間（需 app.js 設定 board._tlPlayhead）
-      if (this._tlPlayhead !== null && this._tlPlayhead !== undefined && type === 'add') {
-        t = Math.round(this._tlPlayhead);
+      if (untimed) {
+        let t;
+        if (type === 'add' && data && data.stroke && data.stroke.tlT !== undefined) {
+          t = Math.round(data.stroke.tlT);   // 預置戳記（圖形辨識替換繼承原筆 tlT）：沿用
+        } else if (type === 'add' && this._tlPlayhead !== null && this._tlPlayhead !== undefined) {
+          t = Math.round(this._tlPlayhead);
+        } else {
+          t = this._untimedStamp();
+        }
+        // v99：時間戳最小為 1（同計時類）
+        if (t < 1) t = 1;
+        if (type === 'add' && data && data.stroke && data.stroke.tlT === undefined) {
+          data.stroke.tlT = t;
+        }
+        tl.events.push({ t, evt: type, data: data || {} });
+      } else {
+        let freshClock = false;
+        if (!tl.clock) {
+          tl.clock = new LessonClock();
+          tl.clock.start();
+          freshClock = true;
+        }
+        let t = Math.round(tl.clock.now());
+        // v99：時間戳最小為 1，避免 tlT=0 在 cutoff=0 時被顯示（拉到最前應為空白）
+        if (t < 1) t = 1;
+        // v172：新事件不得早於本頁結尾——轉檔課舊筆跡自帶 Doceri 原始時間，
+        // 本機時鐘卻從 0 起算，不夾住的話新筆會被蓋到時間軸最前面（兩套時間）。
+        if ((type === 'add' || type === 'erase') && (this._tlPlayhead === null || this._tlPlayhead === undefined)) {
+          const edge = Math.round(this._liveEdgeT());
+          if (t < edge) {
+            t = edge;
+            tl.clock.base = edge;
+            if (tl.clock.running) tl.clock.t0 = performance.now();
+          }
+        }
+        if (tl.clock && !tl.clock.running) tl.clock.resume();
+        // v47：回放中落筆，用 playhead 時間（需 app.js 設定 board._tlPlayhead）
+        // v206：補筆改結束戳——tlT := 播放頭 + dur，全系統筆跡統一 [tlT−dur, tlT] 區間模型
+        // （舊制 tlT=播放頭是開始戳，與其他筆跡的結束戳混用，補筆區間會凸出總長之外）。
+        if (this._tlPlayhead !== null && this._tlPlayhead !== undefined && type === 'add') {
+          t = Math.round(this._tlPlayhead) + Math.round((data && data.stroke && data.stroke.dur) || 0);
+        }
+        if (type === 'add' && data && data.stroke && data.stroke.tlT === undefined) {
+          // v206：本頁第一筆的時鐘是在這次 _emit 內才建立的，now()≈0 會讓 tlT≈1 與 dur 脫鉤
+          // （區間 [tlT−dur, tlT] 變成負起點）；新建時鐘的第一筆以 dur 為下限，區間起點落在 0。
+          if (freshClock) t = Math.max(t, Math.round(data.stroke.dur || 0));
+          data.stroke.tlT = t;
+        }
+        // v175：補線游標接續——同一播放頭的下一筆接在這一筆後面
+        // v206：游標＝本筆的結束戳（與 tlT 同值），接續語意不變
+        if (type === 'add' && this._tlPlayhead !== null && this._tlPlayhead !== undefined) {
+          this._tlInsertNext = t;
+        }
+        tl.events.push({ t, evt: type, data: data || {} });
       }
-      if (type === 'add' && data && data.stroke && data.stroke.tlT === undefined) {
-        data.stroke.tlT = t;
-      }
-      // v175：補線游標接續——同一播放頭的下一筆接在這一筆後面
-      if (type === 'add' && this._tlPlayhead !== null && this._tlPlayhead !== undefined) {
-        this._tlInsertNext = t + ((data && data.stroke && data.stroke.dur) || 300);
-      }
-      tl.events.push({ t, evt: type, data: data || {} });
     }
     if (this.onEvent) this.onEvent(type, data);
+  }
+  /* v206：不計時事件的戳記——app.js 有提供播放頭就用播放頭，否則用本頁 liveEdge */
+  _untimedStamp() {
+    if (typeof this.onUntimedStamp === 'function') {
+      const v = this.onUntimedStamp();
+      if (v !== null && v !== undefined) return Math.round(v);
+    }
+    return Math.round(this._liveEdgeT());
   }
 
   _newStroke(tool, extra) {
@@ -392,12 +439,12 @@ class Board {
     return s;
   }
 
-  addStroke(stroke, record = true) {
+  addStroke(stroke, record = true, untimed = false) {
     stroke.page = this.pageIndex;
     this.page.strokes.push(stroke);
     this.page.undo.push(stroke);
     this.page.redo.length = 0;
-    if (record) this._emit('add', { page: this.pageIndex, stroke });
+    if (record) this._emit('add', { page: this.pageIndex, stroke }, untimed);
     this.render();
     return stroke;
   }
@@ -426,34 +473,47 @@ class Board {
     }
     if (s.pts) for (const pt of s.pts) { pt[1] = this._r4(pt[1] + dx); pt[2] = this._r4(pt[2] + dy); }
   }
-  /* v204：複製選取（Doceri 式圈選複製貼上）——把目前套索選取的每一筆完整複製一份：
-     新 id、整體偏移 +0.03/+0.03（分數空間，clamp 不超出畫布），複製組成為新選取；
-     每筆走 _emit('add') 同一漏斗取得自己的 tlT 與時間軸事件（不複製段落標記 stops，
-     標記留在原筆）；復原一次整批退掉（undo 堆疊放一筆 {_dupUndo} 紀錄，比照 _moveUndo 慣例）。 */
-  duplicateSelection() {
+  /* v206：筆跡剪貼簿（跨頁存活）——把目前套索選取深拷貝存起來：
+     剝除 id、tlT 與所有 _ 暫存欄位（_orig* 等）；不複製段落標記 stops（標記留在原筆）。 */
+  copySelectionToClipboard() {
     const sel = this._lassoSel;
-    if (!sel || !sel.length) return [];
+    if (!sel || !sel.length) return 0;
+    this._clipboard = sel.map(s => {
+      const c = JSON.parse(JSON.stringify(s));
+      for (const k of Object.keys(c)) if (k[0] === '_') delete c[k];
+      delete c.tlT;
+      delete c.id;
+      return c;
+    });
+    this._pasteSeq = 0;   // 重新複製→累進偏移從頭算
+    return this._clipboard.length;
+  }
+  clipboardCount() { return this._clipboard ? this._clipboard.length : 0; }
+  /* v206：把剪貼簿貼到目前頁——新 id、整體偏移 0.03×次數（分數空間，clamp 不超出畫布），
+     貼上組成為新選取；每筆走不計時 _emit('add')：tlT 蓋目標頁 liveEdge/播放頭戳、dur 保留
+     （Doceri 模型：複製貼上不佔時間）；復原一次整批退掉（{_dupUndo} 紀錄，同 v204 慣例）。 */
+  pasteClipboard() {
+    if (!this._clipboard || !this._clipboard.length) return [];
     const pg = this.page;
+    this._pasteSeq = (this._pasteSeq || 0) + 1;
     let maxX = -1e9, maxY = -1e9;
-    for (const s of sel) {
+    for (const s of this._clipboard) {
       const bb = this._strokeFracBBox(s);
       if (bb) { if (bb.x1 > maxX) maxX = bb.x1; if (bb.y1 > maxY) maxY = bb.y1; }
     }
-    const dx = Math.max(0, Math.min(0.03, 1 - maxX));
-    const dy = Math.max(0, Math.min(0.03, 1 - maxY));
-    const copies = [];
-    for (const s of sel) {
-      const c = JSON.parse(JSON.stringify(s));
-      for (const k of Object.keys(c)) if (k[0] === '_') delete c[k]; // 去暫存欄位（_orig*、_startPerf…）
-      delete c.tlT; // 走 _emit 重新蓋章，取得複製筆自己的時間點
+    const step = 0.03 * this._pasteSeq;
+    const dx = Math.max(0, Math.min(step, 1 - maxX));
+    const dy = Math.max(0, Math.min(step, 1 - maxY));
+    const copies = this._clipboard.map(src => {
+      const c = JSON.parse(JSON.stringify(src));
       c.id = this._strokeSeq++;
       c.page = this.pageIndex;
       this._shiftStrokeFrac(c, dx, dy);
-      copies.push(c);
-    }
+      return c;
+    });
     for (const c of copies) {
       pg.strokes.push(c);
-      this._emit('add', { page: this.pageIndex, stroke: c });
+      this._emit('add', { page: this.pageIndex, stroke: c }, true);
     }
     pg.redo.length = 0;
     pg.undo.push({ _dupUndo: 1, strokes: copies });
@@ -461,6 +521,13 @@ class Board {
     if (typeof window !== 'undefined' && window._mokeUpdateRotateBtns) window._mokeUpdateRotateBtns();
     this.render();
     return copies;
+  }
+  /* v204：複製選取（Doceri 式圈選複製貼上）——複製一份、整體偏移、複製組成為新選取、整批可復原。
+     v206：改走剪貼簿——入剪貼簿＋立即貼上一份（手感與 v204 相同，且剪貼簿留著可再貼/跨頁貼）。 */
+  duplicateSelection() {
+    if (!this._lassoSel || !this._lassoSel.length) return [];
+    this.copySelectionToClipboard();
+    return this.pasteClipboard();
   }
   /* v204：整批複製的復原/重做——只處理實際還在畫布上的複製筆（中途被刪/擦掉的不復活） */
   _dupUndoStep(isUndo) {
@@ -473,7 +540,7 @@ class Board {
       const ids = new Set(entry.strokes.map(s => s.id));
       const present = this.page.strokes.filter(s => ids.has(s.id));
       this.page.strokes = this.page.strokes.filter(s => !ids.has(s.id));
-      for (const s of present) this._emit('unadd', { page: this.pageIndex, id: s.id });
+      for (const s of present) this._emit('unadd', { page: this.pageIndex, id: s.id }, true); // v206：不計時
       to.push({ _dupUndo: 1, strokes: entry.strokes, _removedIds: present.map(s => s.id) });
       if (this._lassoSel && this._lassoSel.some(s => ids.has(s.id))) {
         this._lassoSel = this._lassoSel.filter(s => !ids.has(s.id));
@@ -485,7 +552,7 @@ class Board {
       const back = entry.strokes.filter(s => want.has(s.id) && !this.page.strokes.some(x => x.id === s.id));
       for (const s of back) {
         this.page.strokes.push(s);
-        this._emit('readd', { page: this.pageIndex, id: s.id, stroke: s });
+        this._emit('readd', { page: this.pageIndex, id: s.id, stroke: s }, true); // v206：不計時
       }
       to.push({ _dupUndo: 1, strokes: entry.strokes });
     }
@@ -512,7 +579,7 @@ class Board {
   addText(fx, fy, text, size) {
     if (!text || !text.trim()) return null;
     const s = this._newStroke('text', { fx: this._r4(fx), fy: this._r4(fy), text: text.trim(), size: size || this.textSize });
-    return this.addStroke(s);
+    return this.addStroke(s, true, true); // v206：文字不計時（Doceri 模型）
   }
 
   eraseAt(fx, fy) {
@@ -540,12 +607,15 @@ class Board {
   }
 
   /* v173：漣波補位——移除被刪筆跡佔的時間區間，其後筆跡/事件同步前移，總長跟著縮。
-     v174：墨課沒有錄音功能（2026-11-13 拍板不做、2026-11-16 南勛重申），不需護欄，無條件補位。 */
+     v174：墨課沒有錄音功能（2026-11-13 拍板不做、2026-11-16 南勛重申），不需護欄，無條件補位。
+     v206：區間模型修正——tlT 是「結束戳」，筆跡真實區間是 [tlT−dur, tlT]；
+     舊制用 [tlT, tlT+dur]（開始戳模型）算，刪一筆後，凡在被刪筆 dur 內畫完的後續筆跡
+     都會被 shift() 精確塌陷到被刪筆的 tlT 上（重播時整批同時冒出＝學長的「筆跡錯亂」）。 */
   rippleCompact(removed) {
     if (!removed || !removed.length) return;
     const pg = this.page;
     const spans = removed
-      .map(s => [s.tlT || 0, (s.tlT || 0) + (s.dur || 300)])
+      .map(s => [Math.max(0, (s.tlT || 0) - (s.dur || 300)), s.tlT || 0])
       .sort((a, b) => a[0] - b[0]);
     if (!spans.length) return;
     const merged = [spans[0].slice()];
@@ -676,6 +746,8 @@ class Board {
   _posItems(strokes) {
     return strokes.map(s => ({ id: s.id, fx: s.fx, fy: s.fy,
       fx0: s.fx0, fy0: s.fy0, fx1: s.fx1, fy1: s.fy1,
+      // v206：連同尺寸欄位一起快照（縮放復原/重播歷史用；舊紀錄缺欄位時 _applyPosItems 自動跳過）
+      width: s.width, size: s.size, fw: s.fw, fh: s.fh, rot: s.rot,
       pts: s.pts ? s.pts.map(pt => [pt[0], pt[1], pt[2], pt[3]]) : null }));
   }
   _applyPosItems(items) {
@@ -684,6 +756,11 @@ class Board {
       if (!s) continue;
       if (it.fx !== undefined) { s.fx = it.fx; s.fy = it.fy; }
       if (it.fx0 !== undefined) { s.fx0 = it.fx0; s.fy0 = it.fy0; s.fx1 = it.fx1; s.fy1 = it.fy1; }
+      if (it.width !== undefined) s.width = it.width;
+      if (it.size !== undefined) s.size = it.size;
+      if (it.fw !== undefined) s.fw = it.fw;
+      if (it.fh !== undefined) s.fh = it.fh;
+      if (it.rot !== undefined) s.rot = it.rot;
       if (it.pts) s.pts = it.pts.map(pt => [pt[0], pt[1], pt[2], pt[3]]);
     }
   }
@@ -691,6 +768,7 @@ class Board {
     if (!origItems || !origItems.length) return;
     this.page.undo.push({ _moveUndo: 1, items: origItems.map(o => ({ id: o.s.id,
       fx: o.fx, fy: o.fy, fx0: o.fx0, fy0: o.fy0, fx1: o.fx1, fy1: o.fy1,
+      width: o.width, size: o.size, fw: o.fw, fh: o.fh, rot: o.rot,
       pts: o.pts ? o.pts.map(pt => [pt[0], pt[1], pt[2], pt[3]]) : null })) });
     this.page.redo = [];
   }
@@ -714,7 +792,7 @@ class Board {
     if (!s) return;
     this.page.strokes = this.page.strokes.filter(x => x.id !== s.id);
     this.page.redo.push(s);
-    this._emit('unadd', { page: this.pageIndex, id: s.id });  // v25：復原＝從時間軸移除該筆（同步刪除它的時間）
+    this._emit('unadd', { page: this.pageIndex, id: s.id }, true);  // v25：復原＝從時間軸移除該筆（同步刪除它的時間）；v206：不計時（復原不喚醒時鐘）
     this.render();
   }
   redo() {
@@ -729,7 +807,7 @@ class Board {
       this.page.tl.erased = this.page.tl.erased.filter(e => e.stroke.id !== s.id);
     }
     this.page.undo.push(s);
-    this._emit('readd', { page: this.pageIndex, id: s.id, stroke: s });  // v25：重做＝恢復該筆的時間軸紀錄
+    this._emit('readd', { page: this.pageIndex, id: s.id, stroke: s }, true);  // v25：重做＝恢復該筆的時間軸紀錄；v206：不計時
     this.render();
   }
   clearPage(keepImage = true) {
@@ -968,8 +1046,8 @@ class Board {
           return [pt[0], this._r4(nx / W), this._r4(ny / H), pt[3]];
         });
       }
-      // 發時間軸事件（silent 時跳過，手勢結束統一發）
-      if (!silent) this._emit('move', { page: this.pageIndex, id: s.id, rotate: angleDeg });
+      // 發時間軸事件（silent 時跳過，手勢結束統一發）；v206：調整不計時
+      if (!silent) this._emit('move', { page: this.pageIndex, id: s.id, rotate: angleDeg }, true);
     }
     this.pokeActivity();
     this.render();
@@ -983,6 +1061,135 @@ class Board {
         window._mokeSyncTime(lastT);
       }
     }
+  }
+  /* v206：畫布 px → 分數座標（_fracToPx 的逆運算；lockBg 頁走底圖 bounds） */
+  _pxToFrac(px, py) {
+    const b = this._lockBounds();
+    if (b) return [(px - b.x0) / (b.x1 - b.x0), (py - b.y0) / (b.y1 - b.y0)];
+    return [px / this._cssW, py / this._cssH];
+  }
+  /* v206：選取快照（手勢/縮放的起始幾何，格式比照套索拖曳的 orig，另含尺寸欄位） */
+  _selSnapshot(strokes) {
+    return strokes.map(s => ({ s, fx: s.fx, fy: s.fy,
+      fx0: s.fx0, fy0: s.fy0, fx1: s.fx1, fy1: s.fy1,
+      pts: s.pts ? s.pts.map(pt => [pt[0], pt[1], pt[2], pt[3]]) : null,
+      width: s.width, size: s.size, fw: s.fw, fh: s.fh, rot: s.rot || 0 }));
+  }
+  /* v206：把快照幾何記成筆跡的 _orig*（重播時 cutoff 在調整前要顯示舊位置/舊尺寸）。
+     位置沿用既有慣例（只記第一次），尺寸欄位各自獨立補記（舊移動沒記到的這次補上）。 */
+  _captureOrig(s, o) {
+    if (s._origFx === undefined) {
+      s._origFx = o.fx; s._origFy = o.fy; s._origRot = o.rot || 0;
+      s._origFx0 = o.fx0; s._origFy0 = o.fy0;
+      s._origFx1 = o.fx1; s._origFy1 = o.fy1;
+      s._origPts = o.pts ? o.pts.map(pt => [pt[0], pt[1], pt[2], pt[3]]) : null;
+    }
+    if (s._origWidth === undefined) s._origWidth = (o.width !== undefined ? o.width : s.width);
+    if (s._origSize === undefined) s._origSize = (o.size !== undefined ? o.size : s.size);
+    if (s._origFw === undefined) s._origFw = (o.fw !== undefined ? o.fw : s.fw);
+    if (s._origFh === undefined) s._origFh = (o.fh !== undefined ? o.fh : s.fh);
+  }
+  /* v206：選取群組變換——以快照為基準，繞 (cxPx, cyPx)（畫布 px）縮放 factor、旋轉 angleDeg，
+     再平移 (dxPx, dyPx)。每次都從快照重算（手勢給累計值，不累積誤差）。
+     筆/螢光筆：點位變換＋筆寬×factor；圖形：中心變換＋寬高×factor＋rot 累計（不轉角點，同 rotateSelection）；
+     文字：錨點變換＋字級×factor＋rot 累計；貼紙：中心變換＋fw/fh×factor＋rot 累計。
+     tlT/dur 一律不動（Doceri 模型：調整不計時）。 */
+  _applySelTransform(items, factor, angleDeg, cxPx, cyPx, dxPx, dyPx) {
+    const rad = angleDeg * Math.PI / 180, cos = Math.cos(rad), sin = Math.sin(rad);
+    const tf = (px, py) => {
+      const rx = (px - cxPx) * factor, ry = (py - cyPx) * factor;
+      return [cxPx + rx * cos - ry * sin + dxPx, cyPx + rx * sin + ry * cos + dyPx];
+    };
+    for (const o of items) {
+      const s = o.s;
+      if (o.pts && o.pts.length) {
+        s.pts = o.pts.map(pt => {
+          const [px, py] = this._fracToPx(pt[1], pt[2]);
+          const [nx, ny] = tf(px, py);
+          const [fx, fy] = this._pxToFrac(nx, ny);
+          return [pt[0], this._r4(fx), this._r4(fy), pt[3]];
+        });
+        if ((s.tool === 'pen' || s.tool === 'highlighter') && o.width !== undefined) {
+          s.width = Math.round(o.width * factor * 100) / 100;
+        }
+      }
+      if (o.fx0 !== undefined) {
+        const [ax, ay] = this._fracToPx(o.fx0, o.fy0);
+        const [bx, by] = this._fracToPx(o.fx1, o.fy1);
+        const [ncx, ncy] = tf((ax + bx) / 2, (ay + by) / 2);
+        const hw = (bx - ax) / 2 * factor, hh = (by - ay) / 2 * factor;
+        const [fx0, fy0] = this._pxToFrac(ncx - hw, ncy - hh);
+        const [fx1, fy1] = this._pxToFrac(ncx + hw, ncy + hh);
+        s.fx0 = this._r4(fx0); s.fy0 = this._r4(fy0);
+        s.fx1 = this._r4(fx1); s.fy1 = this._r4(fy1);
+        s.rot = ((o.rot || 0) + angleDeg) % 360;
+      }
+      if (o.fx !== undefined) {
+        const [px, py] = this._fracToPx(o.fx, o.fy);
+        const [nx, ny] = tf(px, py);
+        const [fx, fy] = this._pxToFrac(nx, ny);
+        s.fx = this._r4(fx); s.fy = this._r4(fy);
+        s.rot = ((o.rot || 0) + angleDeg) % 360;
+        if (s.tool === 'text' && o.size !== undefined) s.size = Math.round(o.size * factor * 10) / 10;
+        if (s.tool === 'sticker') {
+          if (o.fw !== undefined) s.fw = this._r4(o.fw * factor);
+          if (o.fh !== undefined) s.fh = this._r4(o.fh * factor);
+        }
+      }
+    }
+  }
+  /* v206：選取手勢開始——拍快照、算中心、把 _orig* 記好（重播歷史）。
+     replayOrig：手勢由套索拖曳中途轉來時，傳拖曳的 orig 讓 _orig* 記拖曳前的位置。 */
+  _selGestureBegin(replayOrig) {
+    const sel = this._lassoSel;
+    if (!sel || !sel.length) { this._selBase = null; this._selBaseCenter = null; return null; }
+    this._selBase = this._selSnapshot(sel);
+    const bb = this._lassoBBox();
+    this._selBaseCenter = bb ? { x: (bb.x0 + bb.x1) / 2, y: (bb.y0 + bb.y1) / 2 } : null;
+    for (const o of (replayOrig || this._selBase)) this._captureOrig(o.s, o);
+    return this._selBase;
+  }
+  /* v206：選取手勢結束——整批一筆復原＋每筆發一次不計時 'move' 事件＋暫停時鐘（同旋轉手勢慣例）。
+     undoItems：復原要退回的快照（預設手勢快照；由拖曳轉來時傳拖曳 orig，整段手勢一次退回）。 */
+  _selGestureEnd(extra, undoItems) {
+    const base = this._selBase;
+    this._selBase = null;
+    this._selBaseCenter = null;
+    if (!base || !base.length) return;
+    this._pushMoveUndo(undoItems || base);
+    for (const o of base) {
+      this._emit('move', Object.assign({ page: this.pageIndex, id: o.s.id }, extra || {}), true);
+    }
+    this.pokeActivity();
+    const tl = this.page && this.page.tl;
+    if (tl && tl.clock && tl.clock.running) {
+      tl.clock.pause();
+      const lastT = Math.round(this._liveEdgeT());
+      tl.clock.base = lastT;
+      if (typeof window !== 'undefined' && window._mokeSyncTime) {
+        window._mokeSyncTime(lastT);
+      }
+    }
+  }
+  /* v206：縮放選取（比照 rotateSelection 架構）——factor 為倍率（clamp 0.2–5，比照圖片縮放），
+     center 為畫布 px {x, y}，省略＝選取包圍盒中心。silent=true 為手勢模式：
+     從 _selGestureBegin 的快照套用累計 factor（手勢結束由 _selGestureEnd 統一發事件/復原）；
+     非 silent 立即完成並留一筆整批復原＋'move' 事件。tlT/dur 不變（調整不計時）。 */
+  scaleSelection(factor, center, silent) {
+    if (!this._lassoSel || !this._lassoSel.length) return;
+    factor = Math.max(0.2, Math.min(5, factor || 1));
+    if (silent) {
+      if (!this._selBase) this._selGestureBegin();
+      const c = center || this._selBaseCenter;
+      if (this._selBase && c) this._applySelTransform(this._selBase, factor, 0, c.x, c.y, 0, 0);
+      this.render();
+      return;
+    }
+    this._selGestureBegin();
+    const c = center || this._selBaseCenter;
+    if (this._selBase && c) this._applySelTransform(this._selBase, factor, 0, c.x, c.y, 0, 0);
+    this._selGestureEnd({ scale: factor });
+    this.render();
   }
   /* v105：套索圈選—任一關鍵點在多邊形內就選中 */
   /* v150：套索點選 — 點一下選中單一筆跡/圖形（南勛要求：不用畫圈）。
@@ -1178,9 +1385,10 @@ class Board {
       }
     }
     // cutoff 在所有移動之前，用原始位置（含原始旋轉角）
-    if (s._origPts) return { pts: s._origPts };
+    // v206：連同原始尺寸回傳（縮放前的筆寬/字級/貼紙寬高），重播歷史才完整
+    if (s._origPts) return { pts: s._origPts, width: s._origWidth };
     if (s._origFx0 !== undefined) return { fx0: s._origFx0, fy0: s._origFy0, fx1: s._origFx1, fy1: s._origFy1, rot: s._origRot || 0 };
-    return { fx: s._origFx, fy: s._origFy, rot: s._origRot || 0 };
+    return { fx: s._origFx, fy: s._origFy, rot: s._origRot || 0, size: s._origSize, fw: s._origFw, fh: s._origFh };
   }
   _down(e) {
     e.preventDefault();
@@ -1237,6 +1445,23 @@ class Board {
         } else {
           this._pinchCandidate = { drawing: null, t0: now };
         }
+        // v206：第二指落下＝雙指手勢確定——取消套索路徑（否則 _move 會先被套索路徑吃掉，
+        // 捏合變成拖移選取，學長實測）；進行中的選取拖曳/把手旋轉轉交捏合接手。
+        const hadLassoPath = !!this._lassoPath;
+        this._lassoPath = null;
+        const dragOrig = this._lassoDrag ? this._lassoDrag.orig : null;
+        const dragMoved = !!(this._lassoDrag && this._lassoDrag.moved);
+        this._lassoDrag = null;
+        const rotDragMoved = !!(this._rotateDrag && this._rotateDrag.moved);
+        this._rotateDrag = null;
+        // v206：第一指用 pen 在選取外落筆時，v147 已先清掉選取並開始畫——
+        // 雙指成立就還原選取，整組改走選取捏合（不觸發雙指輕觸復原）
+        if (this._selCleared && this._pinchCandidate && this._pinchCandidate.drawing) {
+          this._lassoSel = this._selCleared;
+          this._pinchCandidate = null;
+          if (typeof window !== 'undefined' && window._mokeUpdateRotateBtns) window._mokeUpdateRotateBtns();
+        }
+        this._selCleared = null;
         const [p1, p2] = [...this._pointers.values()];
         this._pinch = {
           d0: Math.max(1, Math.hypot(p2.x - p1.x, p2.y - p1.y)),
@@ -1248,6 +1473,30 @@ class Board {
           imgS0: (() => { const s = this._imgById(this.page, this.imgSelId); return (s && s.s) || 1; })(),
           moved: false
         };
+        // v206：有選取且不在底圖調整模式→捏合整組判給選取（距離縮放/角度旋轉/中點移動），
+        // 手勢期間 view 凍結；底圖調整的圖片縮放優先級照現行（imgAdjust 時不搶）
+        if (this._lassoSel && this._lassoSel.length && !this.imgAdjust) {
+          const pc = this._pinch;
+          pc.sel = true;
+          pc.aCum = 0;
+          pc.preMoved = dragMoved || rotDragMoved;
+          if (dragOrig) {
+            // 拖曳 orig 補上尺寸欄位（拖曳本身不改尺寸，值＝拖曳前值），整段手勢一筆復原退回拖曳前
+            for (const o of dragOrig) {
+              if (o.width === undefined) {
+                o.width = o.s.width; o.size = o.s.size;
+                o.fw = o.s.fw; o.fh = o.s.fh; o.rot = o.s.rot || 0;
+              }
+            }
+            pc.undoOrig = dragOrig;
+            this._selGestureBegin(dragOrig);
+          } else {
+            this._selGestureBegin();
+          }
+          pc.selCx = this._selBaseCenter ? this._selBaseCenter.x : 0;
+          pc.selCy = this._selBaseCenter ? this._selBaseCenter.y : 0;
+        }
+        if (hadLassoPath) this.render();
         return;
       }
     }
@@ -1281,6 +1530,7 @@ class Board {
     if (hasSel && this._rotateDragDown(p)) return;
     // v147：有選取時在其他地方下筆＝先確定（取消選取，把手立刻消失），同一筆照常畫下一筆（南勛指定的確定方式）
     if (hasSel && !this.imgAdjust && this.tool !== 'lasso') {
+      this._selCleared = this._lassoSel;  // v206：先記住——第二指落下成立雙指時還原，改走選取捏合
       this._lassoSel = null;
       if (typeof window !== 'undefined' && window._mokeUpdateRotateBtns) window._mokeUpdateRotateBtns();
       this.render();
@@ -1398,6 +1648,75 @@ class Board {
       const old = this._pointers.get(e.pointerId);
       this._pointers.set(e.pointerId, { x: e.clientX - rect.left, y: e.clientY - rect.top, type: old.type }); // v130：保留 type，否則雙指被誤判
     }
+    // v206：雙指手勢優先於套索路徑/拖曳（_down 在第二指落下時已取消它們，這裡再把順序釘死）
+    if (this._pinch && this._pointers.size === 2) {
+      const [p1, p2] = [...this._pointers.values()];
+      const d = Math.max(1, Math.hypot(p2.x - p1.x, p2.y - p1.y));
+      const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
+      const pc = this._pinch;
+      // v131：純旋轉時距離/中點都不變，也要算成 moved，否則旋轉永遠不觸發
+      const aNow = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+      let daNow = (aNow - pc.a0) * 180 / Math.PI;
+      if (daNow > 180) daNow -= 360;
+      if (daNow < -180) daNow += 360;
+      if (!pc.moved && (Math.abs(d - pc.d0) > 12 || Math.hypot(mx - pc.mx0, my - pc.my0) > 12 || Math.abs(daNow) > 5)) {
+        pc.moved = true;
+        this._pinchCandidate = null;  // 移動了＝縮放手勢，不是輕觸復原
+      }
+      if (pc.moved) {
+        if (pc.sel && this._selBase) {
+          // v206：捏合判給選取——距離→繞選取中心縮放、角度→旋轉、中點位移→移動選取；
+          // 全部從手勢快照套用累計值，view 凍結不動
+          const a = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+          let da = (a - pc.a0) * 180 / Math.PI;
+          if (da > 180) da -= 360;
+          if (da < -180) da += 360;
+          if (Math.abs(da) > 2) { pc.aCum += da; pc.a0 = a; }  // 2° 死區（同 v110）
+          const factor = Math.max(0.2, Math.min(5, d / pc.d0));
+          pc.lastFactor = factor;
+          const sc = this.view.scale || 1;
+          this._applySelTransform(this._selBase, factor, pc.aCum, pc.selCx, pc.selCy,
+            (mx - pc.mx0) / sc, (my - pc.my0) / sc);
+          pc.touched = true;
+          this.render();
+        } else {
+          // v110：有套索選取時，雙指旋轉選取（角度變化轉為旋轉）
+          if (this._lassoSel && this._lassoSel.length && !this.imgAdjust) {
+            const a = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+            let da = (a - pc.a0) * 180 / Math.PI;
+            // 處理角度跳變（-180 ~ 180）
+            if (da > 180) da -= 360;
+            if (da < -180) da += 360;
+            if (Math.abs(da) > 2) {  // 2° 死區，避免誤觸
+              this.rotateSelection(da, true);  // silent：結束時統一發事件
+              pc.rotated = true;
+              pc.a0 = a;  // 重置基準，連續旋轉
+            }
+          }
+          // v73：底圖調整模式時，雙指縮放底圖（不動視圖）
+          // v139：多圖 — 縮放選中的那張
+          if (this.imgAdjust) {
+            const pg = this.page;
+            const imgs = this._migrateImages(pg);
+            const sel = this._imgById(pg, this.imgSelId) || imgs[imgs.length - 1];
+            if (sel) {
+              sel.s = Math.max(0.2, Math.min(5, (pc.imgS0 || sel.s || 1) * d / pc.d0));
+              this.render();
+            }
+          } else if (!pc.sel) {
+            const v = this.view;
+            const newScale = Math.max(0.5, Math.min(5, pc.scale0 * d / pc.d0));
+            const k = newScale / pc.scale0;
+            // 以中點為中心縮放：中點下的畫布點保持在手指中點下
+            v.scale = newScale;
+            v.ox = mx - (pc.mx0 - pc.ox0) * k;
+            v.oy = my - (pc.my0 - pc.oy0) * k;
+            this.render();
+          }
+        }
+      }
+      return;
+    }
     // v104：手抓拖曳文字
     if (this._handDrag) {
       const d = this._handDrag;
@@ -1469,57 +1788,6 @@ class Board {
         im.y = d.imgY0 + (py - d.y0);
       }
       this.render();
-      return;
-    }
-    if (this._pinch && this._pointers.size === 2) {
-      const [p1, p2] = [...this._pointers.values()];
-      const d = Math.max(1, Math.hypot(p2.x - p1.x, p2.y - p1.y));
-      const mx = (p1.x + p2.x) / 2, my = (p1.y + p2.y) / 2;
-      const pc = this._pinch;
-      // v131：純旋轉時距離/中點都不變，也要算成 moved，否則旋轉永遠不觸發
-      const aNow = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-      let daNow = (aNow - pc.a0) * 180 / Math.PI;
-      if (daNow > 180) daNow -= 360;
-      if (daNow < -180) daNow += 360;
-      if (!pc.moved && (Math.abs(d - pc.d0) > 12 || Math.hypot(mx - pc.mx0, my - pc.my0) > 12 || Math.abs(daNow) > 5)) {
-        pc.moved = true;
-        this._pinchCandidate = null;  // 移動了＝縮放手勢，不是輕觸復原
-      }
-      if (pc.moved) {
-        // v110：有套索選取時，雙指旋轉選取（角度變化轉為旋轉）
-        if (this._lassoSel && this._lassoSel.length && !this.imgAdjust) {
-          const a = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-          let da = (a - pc.a0) * 180 / Math.PI;
-          // 處理角度跳變（-180 ~ 180）
-          if (da > 180) da -= 360;
-          if (da < -180) da += 360;
-          if (Math.abs(da) > 2) {  // 2° 死區，避免誤觸
-            this.rotateSelection(da, true);  // silent：結束時統一發事件
-            pc.rotated = true;
-            pc.a0 = a;  // 重置基準，連續旋轉
-          }
-        }
-        // v73：底圖調整模式時，雙指縮放底圖（不動視圖）
-        // v139：多圖 — 縮放選中的那張
-        if (this.imgAdjust) {
-          const pg = this.page;
-          const imgs = this._migrateImages(pg);
-          const sel = this._imgById(pg, this.imgSelId) || imgs[imgs.length - 1];
-          if (sel) {
-            sel.s = Math.max(0.2, Math.min(5, (pc.imgS0 || sel.s || 1) * d / pc.d0));
-            this.render();
-          }
-        } else {
-          const v = this.view;
-          const newScale = Math.max(0.5, Math.min(5, pc.scale0 * d / pc.d0));
-          const k = newScale / pc.scale0;
-          // 以中點為中心縮放：中點下的畫布點保持在手指中點下
-          v.scale = newScale;
-          v.ox = mx - (pc.mx0 - pc.ox0) * k;
-          v.oy = my - (pc.my0 - pc.oy0) * k;
-          this.render();
-        }
-      }
       return;
     }
     const p = this._pos(e);
@@ -1597,12 +1865,12 @@ class Board {
     if (this._imgDrag) this._imgDrag = null;
     // v143：裁切拖曳結束
     if (this._cropDrag) this._cropDrag = null;
-    // v149：角落把手旋轉結束—統一發一次時間軸事件（比照雙指旋轉）
+    // v149：角落把手旋轉結束—統一發一次時間軸事件（比照雙指旋轉）；v206：不計時
     if (this._rotateDrag) {
       const rd = this._rotateDrag; this._rotateDrag = null;
       if (rd.moved && this._lassoSel && this._lassoSel.length) {
         for (const s of this._lassoSel) {
-          this._emit('move', { page: this.pageIndex, id: s.id, rotate: 'gesture' });
+          this._emit('move', { page: this.pageIndex, id: s.id, rotate: 'gesture' }, true);
         }
         this.pokeActivity();
       }
@@ -1629,10 +1897,10 @@ class Board {
           }
           // 若有未完成的繪製（非輕觸），直接丟棄（已在 _down 時 render 清掉）
         }
-        // v110：雙指旋轉過套索選取，統一發一次時間軸事件
+        // v110：雙指旋轉過套索選取，統一發一次時間軸事件；v206：不計時
         if (this._pinch.rotated && this._lassoSel && this._lassoSel.length) {
           for (const s of this._lassoSel) {
-            this._emit('move', { page: this.pageIndex, id: s.id, rotate: 'gesture' });
+            this._emit('move', { page: this.pageIndex, id: s.id, rotate: 'gesture' }, true);
           }
           this.pokeActivity();
           // 暫停時鐘（視為一次動作完成）
@@ -1645,6 +1913,18 @@ class Board {
               window._mokeSyncTime(lastT);
             }
           }
+        }
+        // v206：選取捏合結束—整批一筆復原＋每筆一次 'move' 事件（_selGestureEnd 內處理，含暫停時鐘）；
+        // 完全沒動到就只清手勢快照
+        if (this._pinch.sel) {
+          if (this._pinch.touched || this._pinch.preMoved) {
+            this._selGestureEnd({ scale: this._pinch.lastFactor || 1, rotate: 'gesture' },
+              this._pinch.undoOrig || null);
+          } else {
+            this._selBase = null;
+            this._selBaseCenter = null;
+          }
+          this.render();
         }
         this._pinch = null;
         this._pinchCandidate = null;
@@ -1685,6 +1965,7 @@ class Board {
       delete s._pressSm;  // v145：壓感平滑狀態，不存檔（已寫入各點第 4 欄）
       if (s.pts.length === 1) s.pts.push([s.dur, s.pts[0][1], s.pts[0][2], s.pts[0][3]]);
       this.addStroke(s);
+      this._selCleared = null;  // v206：單指書寫已提交，v147 清掉的選取不需再還原
       // v145：圖形自動辨識 — 提筆後 600ms 沒新筆跡，判斷是否為圓/直線
       if (this.autoShape && s.tool === 'pen') {
         const sid = s.id;
@@ -1701,7 +1982,7 @@ class Board {
       if (d.moved) {
         this._pushMoveUndo([{ s: d.stroke, fx: d.fx0, fy: d.fy0 }]);  // v180：文字拖曳也留復原紀錄
         this._emit('move', { page: this.pageIndex, id: d.stroke.id,
-          fx: d.stroke.fx, fy: d.stroke.fy, fx0: d.fx0, fy0: d.fy0 });
+          fx: d.stroke.fx, fy: d.stroke.fy, fx0: d.fx0, fy0: d.fy0 }, true);  // v206：不計時
       }
       this.render();
     }
@@ -1741,7 +2022,7 @@ class Board {
           this._emit('move', { page: this.pageIndex, id: s.id,
             fx: s.fx, fy: s.fy, fx0: o.fx, fy0: o.fy,
             fx0s: s.fx0, fy0s: s.fy0, fx1s: s.fx1, fy1s: s.fy1,
-            pts: s.pts ? true : undefined });
+            pts: s.pts ? true : undefined }, true);  // v206：不計時
         }
       }
       this.render();
@@ -1821,7 +2102,7 @@ class Board {
     pg.strokes = pg.strokes.filter(x => x.id !== s.id);
     pg.undo = pg.undo.filter(x => x.id !== s.id);
     pg.redo = pg.redo.filter(x => x.id !== s.id);
-    this._emit('unadd', { page: this.pageIndex, id: s.id });
+    this._emit('unadd', { page: this.pageIndex, id: s.id }, true); // v206：辨識替換不計時（不喚醒時鐘）
     const ns = this._newStroke('shape', {
       shape: hit.shape,
       fx0: this._r4(hit.fx0), fy0: this._r4(hit.fy0),
@@ -1831,7 +2112,7 @@ class Board {
       // 在舊課補筆時被 v172 夾制蓋到整頁結尾，筆跡當場消失（學長實測：中央線往後跳）
       tlT: s.tlT
     });
-    this.addStroke(ns);
+    this.addStroke(ns, true, true); // v206：不計時（tlT 已繼承，不重蓋、不喚醒時鐘）
     // v148：辨識成圖形也不自動選取（同圖形工具定版行為）
     this._lassoSel = null;
     if (typeof window !== 'undefined' && window._mokeUpdateRotateBtns) window._mokeUpdateRotateBtns();
@@ -2167,37 +2448,45 @@ class Board {
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     if (s.tool === 'highlighter') { ctx.globalAlpha = 0.35; }
     if (s.tool === 'text') {
-      let fx = s.fx, fy = s.fy, rot = s.rot || 0;
+      let fx = s.fx, fy = s.fy, rot = s.rot || 0, size = s.size || 48;
       // v104/v105：重播時位置要對—用 _strokePosAt 取 cutoff 時間的位置
-      // v108：也要還原旋轉角
+      // v108：也要還原旋轉角；v206：還原縮放前的字級
       if (this.tlCutoff !== null && this.tlCutoff !== undefined) {
         const pos = this._strokePosAt(s, this.tlCutoff);
-        if (pos && pos.fx !== undefined) { fx = pos.fx; fy = pos.fy; rot = pos.rot || 0; }
+        if (pos && pos.fx !== undefined) {
+          fx = pos.fx; fy = pos.fy; rot = pos.rot || 0;
+          if (pos.size !== undefined && pos.size) size = pos.size;
+        }
       }
       ctx.fillStyle = s.color;
-      ctx.font = `${(s.size || 48) * k}px "PingFang TC","Microsoft JhengHei",sans-serif`;
+      ctx.font = `${size * k}px "PingFang TC","Microsoft JhengHei",sans-serif`;
       // v108：文字本身旋轉（繞文字左下角，不變形）
       if (rot) {
         ctx.save();
-        ctx.translate(fx * W, fy * H + (s.size || 48) * k * 0.8);
+        ctx.translate(fx * W, fy * H + size * k * 0.8);
         ctx.rotate(rot * Math.PI / 180);
         ctx.fillText(s.text, 0, 0);
         ctx.restore();
       } else {
-        ctx.fillText(s.text, fx * W, fy * H + (s.size || 48) * k * 0.8);
+        ctx.fillText(s.text, fx * W, fy * H + size * k * 0.8);
       }
       ctx.restore(); return;
     }
     if (s.tool === 'sticker') {
       // v195：貼紙整張出現（不做逐筆進度）；重播時用 cutoff 時間的位置（移動前顯示舊位置）
-      let fx = s.fx, fy = s.fy, rot = s.rot || 0;
+      // v206：cutoff 在調整前時，寬高也用原始值（pos.fw/fh）
+      let fx = s.fx, fy = s.fy, rot = s.rot || 0, fw = s.fw, fh = s.fh;
       if (this.tlCutoff !== null && this.tlCutoff !== undefined) {
         const pos = this._strokePosAt(s, this.tlCutoff);
-        if (pos && pos.fx !== undefined) { fx = pos.fx; fy = pos.fy; rot = pos.rot || 0; }
+        if (pos && pos.fx !== undefined) {
+          fx = pos.fx; fy = pos.fy; rot = pos.rot || 0;
+          if (pos.fw !== undefined) fw = pos.fw;
+          if (pos.fh !== undefined) fh = pos.fh;
+        }
       }
       const el = this._stickerEl(s);
       if (el && el.naturalWidth) {
-        const cx = fx * W, cy = fy * H, dw = s.fw * W, dh = s.fh * H;
+        const cx = fx * W, cy = fy * H, dw = fw * W, dh = fh * H;
         ctx.save();
         ctx.translate(cx, cy);
         if (rot) ctx.rotate(rot * Math.PI / 180);
@@ -2234,18 +2523,23 @@ class Board {
     }
     // pen / highlighter：依時間進度繪製
     // v105：重播時若 cutoff 在移動前，用原始點位
-    let pts = s.pts;
+    // v206：cutoff 在縮放前時，筆寬也用原始值（暫時覆寫 s.width，畫完還原）
+    let pts = s.pts, wSave;
     if (this.tlCutoff !== null && this.tlCutoff !== undefined) {
       const pos = this._strokePosAt(s, this.tlCutoff);
-      if (pos && pos.pts) pts = pos.pts;
+      if (pos && pos.pts) {
+        pts = pos.pts;
+        if (pos.width !== undefined && pos.width !== s.width) { wSave = s.width; s.width = pos.width; }
+      }
     }
-    if (!pts.length) { ctx.restore(); return; }
+    if (!pts.length) { if (wSave !== undefined) s.width = wSave; ctx.restore(); return; }
     const total = s.dur || 1;
     const cutoff = progress * total;
     ctx.strokeStyle = s.color;
     if (s.tool === 'pen') {
       // v145：鋼筆筆壓 — 逐段可變筆寬（螢光筆維持固定寬度）
       this._drawPressStroke(ctx, s, pts, cutoff, W, H, k);
+      if (wSave !== undefined) s.width = wSave;
       ctx.restore(); return;
     }
     ctx.lineWidth = s.width * k;
@@ -2276,6 +2570,7 @@ class Board {
     } else if (started) {
       ctx.stroke();
     }
+    if (wSave !== undefined) s.width = wSave;  // v206：還原筆寬覆寫
     ctx.restore();
   }
 

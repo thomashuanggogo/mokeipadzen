@@ -634,6 +634,8 @@
     '複製選取': 'Copy Selection',
     '：選好筆跡後，套索旁邊會出現複製鈕，按下去把選中的筆跡複製一份（位置稍微錯開），複製的那份會被選起來，直接拖到想要的位置。按復原可整批退掉。': ': After selecting strokes, a Copy button appears next to the lasso — tap it to duplicate the selection (slightly offset). The copies stay selected, so drag them right where you want. Undo removes the whole batch.',
     '已複製 {n} 筆，拖到想要的位置': 'Copied {n} stroke(s) — drag them into place',
+    '貼上筆跡': 'Paste strokes',
+    '已貼上 {n} 筆': 'Pasted {n} stroke(s)',
     '✕ 刪除選取': '✕ Delete Selection',
     '：選好筆跡後，第二排工具列的套索旁邊會出現紅色 ✕ 刪除鈕，按下去直接刪掉選中的筆跡（後面的筆自動往前補位）。': ': After selecting strokes, a red ✕ delete button appears next to the lasso in the second toolbar row — tap it to delete the selected strokes directly (later strokes shift forward to fill the gap).',
     '🗑️ 已刪除 {n} 則筆跡': '🗑️ Deleted {n} stroke(s)',

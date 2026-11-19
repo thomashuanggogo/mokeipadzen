@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v205';
+const APP_VERSION = 'v206';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -529,6 +529,18 @@ function fsGuardExit() {
   $('btn-sel-copy').onclick = () => {
     const copies = board.duplicateSelection();
     if (copies.length) toast(window.t('已複製 {n} 筆，拖到想要的位置', { n: copies.length }));
+    updatePasteBtn();
+  };
+  /* v206：貼上鈕（緊鄰複製鈕）——剪貼簿有內容就顯示（不依賴選取，可先複製、換頁再貼）；
+     貼上落在目前頁、成為新選取，整批一筆復原可退回 */
+  const updatePasteBtn = () => {
+    $('btn-sel-paste').classList.toggle('hidden', !(board.clipboardCount && board.clipboardCount()));
+  };
+  window._mokeUpdatePasteBtn = updatePasteBtn;
+  $('btn-sel-paste').onclick = () => {
+    const pasted = board.pasteClipboard();
+    if (pasted.length) toast(window.t('已貼上 {n} 筆', { n: pasted.length }));
+    updatePasteBtn();
   };
   /* v196：電腦鍵盤（南勛在電腦上用墨課按 Delete 沒反應才補上）：
      Delete/Backspace＝刪選取（同第二排 ✕）；Ctrl+Z 復原、Ctrl+Shift+Z / Ctrl+Y 重做。
@@ -562,6 +574,8 @@ function fsGuardExit() {
     $('btn-sel-delete').classList.toggle('hidden', !(sel && sel.length));
     // v204：複製鈕跟 ✕ 同一套顯示/隱藏時機
     $('btn-sel-copy').classList.toggle('hidden', !(sel && sel.length));
+    // v206：貼上鈕只看剪貼簿（選取變化時順手同步一次）
+    if (typeof updatePasteBtn === 'function') updatePasteBtn();
   };
   window._mokeToast = toast; // v131：供 board.js 顯示提示
   /* ----- v73：底圖調整模式（雙指縮放調大小、單指拖曳移位置） ----- */
@@ -1537,6 +1551,9 @@ function fsGuardExit() {
   /* v175：回放中落筆＝在播放頭原地補線（學長回饋：要補線時被 v172 跳到結尾，補的線出現時機全錯）。
      v172 的防復活保留（eraseT 記該筆自己的 tlT）——當年時間分叉的元兇是擦除用了本機時鐘，不是插入本身。
      同一播放頭連續補筆：_tlInsertNext 游標接續（前一筆 tlT＋dur），不疊在同一瞬間；拉動播放頭換位置就重置。 */
+  /* v206：不計時事件（貼紙/複製貼上/調整等）的戳記來源——回放中且播放頭不在末端時，
+     新物件出現在播放頭位置但不佔時間；其餘情況回傳 null，board 改用該頁 liveEdge。 */
+  board.onUntimedStamp = () => (TLC.active && !TLC.isLive()) ? Math.round(TLC.playhead) : null;
   board.onDrawStart = () => {
     if (!TLC.active) { board._tlPlayhead = null; return; }
     if (TLC.playing) TLC.pause();
@@ -1727,7 +1744,9 @@ function fsGuardExit() {
     const w = tlWin(dur);   // v171：縮放窗口
     strokes.forEach((s, idx) => {
       const t = (s.tlT === undefined ? 0 : s.tlT);
-      const x = (t - w.start) / w.len * 100;
+      // v206：tlT 是結束戳——區塊是 [tlT−dur, tlT]，左緣要用區間起點
+      // （舊制以 tlT 為左緣，整條筆跡區塊往後錯位一個 dur，與 rippleCompact 同一錯誤模型）
+      const x = (Math.max(0, t - (s.dur || 300)) - w.start) / w.len * 100;
       const wid = Math.max(0.8, ((s.dur || 300) / w.len * 100));
       if (x + wid < 0 || x > 100) return;   // 窗口外不畫
       const n = document.createElement('div');
