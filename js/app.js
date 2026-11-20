@@ -2,7 +2,7 @@
 'use strict';
 
 /* v45：版本號（發版時同步更新 sw.js 的 CACHE） */
-const APP_VERSION = 'v209';
+const APP_VERSION = 'v210';
 
 /* ---------- 小工具 ---------- */
 const $ = id => document.getElementById(id);
@@ -369,6 +369,102 @@ function fsGuardExit() {
     _setToolOrig(t);
     if (t === 'pen' || t === 'highlighter') { board.setWidth(widthStore[t]); syncWidthUI(); }
   };
+  /* ----- v210：圖形專屬顏色／粗細／線型（學長第五件主張，GoodNotes 式兩組獨立設定） -----
+     圖形框線有自己的一組設定，與筆那組（#btn-color）完全分開、各記各的（localStorage）。
+     筆那組的行為一字不動；這組只餵 board.shapeColor/shapeWidth/shapeDash。 */
+  const shapeStore = { color: '#111111', width: 5, dash: 0 };
+  try {
+    const savedSh = JSON.parse(localStorage.getItem('moke-shape') || 'null');
+    if (savedSh) {
+      if (typeof savedSh.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(savedSh.color)) shapeStore.color = savedSh.color;
+      if (+savedSh.width >= 2 && +savedSh.width <= 24) shapeStore.width = +savedSh.width;
+      if (savedSh.dash === 1 || savedSh.dash === 0) shapeStore.dash = savedSh.dash;
+    }
+  } catch (e) {}
+  board.setShapeColor(shapeStore.color);
+  board.setShapeWidth(shapeStore.width);
+  board.setShapeDash(shapeStore.dash);
+  const saveShapeStore = () => { try { localStorage.setItem('moke-shape', JSON.stringify(shapeStore)); } catch (err) {} };
+  const shapeColorBox = $('shape-colors');
+  const shapeColorPop = $('shape-color-pop');
+  const shapeColorDot = $('shape-color-dot');
+  const syncShapeUI = () => {
+    shapeColorDot.style.background = shapeStore.color;
+    $('shape-width-range').value = shapeStore.width;
+    $('shape-width-val').textContent = shapeStore.width;
+    $('btn-dash-solid').classList.toggle('active', shapeStore.dash === 0);
+    $('btn-dash-dashed').classList.toggle('active', shapeStore.dash === 1);
+    shapeColorBox.querySelectorAll('.color').forEach(x =>
+      x.classList.toggle('active', x.title === shapeStore.color));
+  };
+  COLORS.forEach(c => {
+    const b = document.createElement('button');
+    b.className = 'color';
+    b.style.background = c;
+    b.title = c;
+    b.onclick = () => {
+      shapeStore.color = c;
+      board.setShapeColor(c);
+      saveShapeStore();
+      syncShapeUI();
+      shapeColorPop.classList.add('hidden'); // 比照筆那組：選完自動關閉
+    };
+    shapeColorBox.appendChild(b);
+  });
+  // 自訂色（比照筆那組：色票盤最後一格彩虹格）
+  const shapeCustomLabel = document.createElement('label');
+  shapeCustomLabel.className = 'color custom';
+  shapeCustomLabel.title = window.t('自訂顏色');
+  const shapeCustomInput = document.createElement('input');
+  shapeCustomInput.type = 'color';
+  shapeCustomInput.value = '#e03131';
+  shapeCustomInput.style.display = 'none';
+  shapeCustomInput.addEventListener('input', () => {
+    shapeStore.color = shapeCustomInput.value;
+    board.setShapeColor(shapeCustomInput.value);
+    saveShapeStore();
+    syncShapeUI();
+  });
+  shapeCustomInput.addEventListener('change', () => shapeColorPop.classList.add('hidden'));
+  shapeCustomLabel.appendChild(shapeCustomInput);
+  shapeColorBox.appendChild(shapeCustomLabel);
+  $('shape-width-range').oninput = e => {
+    shapeStore.width = +e.target.value;
+    board.setShapeWidth(shapeStore.width);
+    saveShapeStore();
+    $('shape-width-val').textContent = e.target.value;
+  };
+  $('btn-dash-solid').onclick = () => {
+    shapeStore.dash = 0; board.setShapeDash(0); saveShapeStore(); syncShapeUI();
+  };
+  $('btn-dash-dashed').onclick = () => {
+    shapeStore.dash = 1; board.setShapeDash(1); saveShapeStore(); syncShapeUI();
+  };
+  syncShapeUI();
+  // popover 開關（比照 #btn-color：fixed 定位、點外面自動關、捲動/縮放關閉）
+  $('btn-shape-color').onclick = (e) => {
+    e.stopPropagation();
+    if (shapeColorPop.classList.contains('hidden')) {
+      const r = $('btn-shape-color').getBoundingClientRect();
+      if (document.body.classList.contains('zen')) {
+        shapeColorPop.style.left = (r.right + 6) + 'px';
+        shapeColorPop.style.top = Math.max(8, r.top) + 'px';
+      } else {
+        shapeColorPop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 340)) + 'px';
+        shapeColorPop.style.top = (r.bottom + 6) + 'px';
+      }
+      shapeColorPop.classList.remove('hidden');
+    } else {
+      shapeColorPop.classList.add('hidden');
+    }
+  };
+  $('toolbar').addEventListener('scroll', () => shapeColorPop.classList.add('hidden'), { passive: true });
+  window.addEventListener('resize', () => shapeColorPop.classList.add('hidden'));
+  document.addEventListener('click', (e) => {
+    if (!shapeColorPop.classList.contains('hidden') && !$('shape-color-group').contains(e.target)) {
+      shapeColorPop.classList.add('hidden');
+    }
+  });
   // v114：禪模式切換（工具列變左側直條；頂部列保留，🧘 直接開關）
   $('btn-zen').onclick = () => {
     document.body.classList.toggle('zen');

@@ -416,6 +416,23 @@ body.guest-mode #rec-controls { visibility: hidden; }
 #color-pop .pop-row .lbl { display: inline; }
 #color-pop #width-range { width: 130px; }
 #width-val { min-width: 22px; text-align: right; font-size: 14px; font-weight: 600; color: #444; font-variant-numeric: tabular-nums; }
+/* ----- v210：圖形專屬顏色/粗細/線型 popover（比照 #color-pop，與筆那組完全獨立） ----- */
+#shape-color-group { position: relative; }
+#shape-color-dot { display: inline-block; width: 22px; height: 22px; border-radius: 50%; background: #111; border: 2px solid #adb5bd; vertical-align: middle; }
+#shape-color-pop {
+  position: fixed; z-index: 1000;
+  background: #fff; border: 1px solid #dee2e6; border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.18); padding: 12px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+#shape-color-pop #shape-colors { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; }
+#shape-color-pop .color.custom { display: inline-block; box-sizing: border-box; cursor: pointer; background: conic-gradient(#e03131, #f08c00, #fab005, #2f9e44, #1971c2, #9c36b5, #e03131); }
+#shape-color-pop .pop-row { display: flex; align-items: center; gap: 8px; }
+#shape-color-pop .pop-row .lbl { display: inline; }
+#shape-color-pop #shape-width-range { width: 130px; }
+#shape-width-val { min-width: 22px; text-align: right; font-size: 14px; font-weight: 600; color: #444; font-variant-numeric: tabular-nums; }
+.dash-btn { padding: 5px 14px; border: 1.5px solid #adb5bd; border-radius: 8px; background: #fff; font-size: 14px; cursor: pointer; color: #212529; }
+.dash-btn.active { border-color: #1971c2; background: #e8f1fa; font-weight: 700; }
 /* 碼表按鈕（頂部重播入口之一） */
 #tl-time.rec-btn { font-variant-numeric: tabular-nums; font-size: 14px; white-space: nowrap; }
 #tl-time.playing { background: #2f9e44; border-color: #2f9e44; }

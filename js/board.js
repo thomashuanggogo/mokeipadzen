@@ -20,6 +20,12 @@ class Board {
     this.tool = 'pen';
     this.color = '#111111';
     this.width = 5;
+    /* v210：圖形專屬設定（學長第五件主張，GoodNotes 式兩組獨立）——圖形框線自己的
+       顏色／粗細／線型，與筆那組 board.color/width 完全分開；app.js 由 localStorage 載入。
+       shapeDash：0=實線、1=短虛線。圖形定稿時一律吃這組，不得再吃筆的設定。 */
+    this.shapeColor = '#111111';
+    this.shapeWidth = 5;
+    this.shapeDash = 0;
     this.textSize = 48;
     this.onEvent = null;          // (type, data) => void，由 app.js 接錄影
     this.onUntimedStamp = null;   // v206：不計時事件的戳記來源（app.js 提供：回放中回傳播放頭，否則 null→用 liveEdge）
@@ -352,6 +358,12 @@ class Board {
   setColor(c) { this.color = c; }
   setWidth(w) { this.width = w; }
   setTextSize(s) { this.textSize = s; }
+  /* v210：圖形專屬設定 setter（與 setColor/setWidth 對偶，互不影響） */
+  setShapeColor(c) { this.shapeColor = c; }
+  setShapeWidth(w) { this.shapeWidth = w; }
+  setShapeDash(d) { this.shapeDash = d ? 1 : 0; }
+  /* v210：短虛線樣式——段長≈3×線寬、間隔≈2×線寬，與線寬成比例（lw＝當下 ctx 的 lineWidth 值） */
+  _dashPattern(lw) { return [Math.max(2, lw * 3), Math.max(2, lw * 2)]; }
 
   /* ---------- 筆跡操作 ---------- */
   /* v47：每頁獨立時間軸。事件寫入當頁的 tl.events，時間是該頁時鐘（第一筆為 00:00）。
@@ -2128,6 +2140,10 @@ class Board {
           origin: d.shape === 'axes' ? (d.origin || 'center') : undefined,
           fx0: this._r4(d.fx0), fy0: this._r4(d.fy0),
           fx1: this._r4(d.fx1), fy1: this._r4(d.fy1),
+          /* v210：圖形定稿一律吃圖形專屬設定（顏色/粗細/線型），不吃筆那組。
+             座標軸同吃顏色/粗細（它本就走這條定稿路），但不套 dash。 */
+          color: this.shapeColor, width: this.shapeWidth,
+          dash: d.shape === 'axes' ? undefined : (this.shapeDash ? 1 : undefined),
           dur: Math.round(performance.now() - d.t)
         });
         this.addStroke(s);
@@ -2291,6 +2307,9 @@ class Board {
       shape: hit.shape,
       fx0: this._r4(hit.fx0), fy0: this._r4(hit.fy0),
       fx1: this._r4(hit.fx1), fy1: this._r4(hit.fy1),
+      /* v210：辨識圖形是筆那一邊的功能——沿用來源筆的顏色/粗細、實線，
+         不吃圖形專屬設定（明確寫死，不靠 _newStroke 預設值碰巧相同） */
+      color: s.color, width: s.width,
       dur: 0,
       // v180：替換圖形繼承原筆跡的 tlT——不繼承的話 _emit 會用當下時間重新蓋章，
       // 在舊課補筆時被 v172 夾制蓋到整頁結尾，筆跡當場消失（學長實測：中央線往後跳）
@@ -2704,6 +2723,8 @@ class Board {
       const x1 = fx0 * W + (fx1 - fx0) * W * progress;
       const y1 = fy0 * H + (fy1 - fy0) * H * progress;
       ctx.strokeStyle = s.color; ctx.lineWidth = s.width * k;
+      // v210：虛線圖形（dash 欄位；無欄位＝實線，舊課檔零遷移）。座標軸永遠實線。
+      if (s.dash && s.shape !== 'axes') ctx.setLineDash(this._dashPattern(s.width * k));
       if (rot) {
         // 繞圖形中心旋轉
         const scx = (x0 + x1) / 2, scy = (y0 + y1) / 2;
@@ -2716,6 +2737,7 @@ class Board {
       } else {
         this._strokeShape(ctx, s.shape, x0, y0, x1, y1, s.origin);
       }
+      ctx.setLineDash([]);  // v210：復原，不得污染後續筆跡
       ctx.restore(); return;
     }
     // pen / highlighter：依時間進度繪製
@@ -2974,8 +2996,11 @@ class Board {
     ctx.save();
     // v42：套用縮放變換
     ctx.setTransform(dpr * v.scale, 0, 0, dpr * v.scale, dpr * v.ox, dpr * v.oy);
-    ctx.strokeStyle = this.color; ctx.lineWidth = this.width * k / v.scale;
-    ctx.setLineDash([8, 6]);
+    // v210：預覽吃圖形專屬設定（顏色/粗細）；線型＝虛線時直接預覽真實短虛線樣式，
+    // 實線時維持既有 [8,6] 預覽慣例（未定稿的視覺語彙）。座標軸不套圖形 dash。
+    ctx.strokeStyle = this.shapeColor; ctx.lineWidth = this.shapeWidth * k / v.scale;
+    if (d.shape !== 'axes' && this.shapeDash) ctx.setLineDash(this._dashPattern(this.shapeWidth * k / v.scale));
+    else ctx.setLineDash([8, 6]);
     this._strokeShape(ctx, d.shape, d.fx0 * W, d.fy0 * H, d.fx1 * W, d.fy1 * H, d.origin);
     ctx.setLineDash([]);
     if (d._compass) {
@@ -2987,8 +3012,8 @@ class Board {
       ctx.stroke();
     }
     if (d._protractor && d._deg !== undefined) {
-      // 量角器角度讀數
-      ctx.fillStyle = this.color;
+      // 量角器角度讀數（v210：屬圖形預覽，吃圖形色）
+      ctx.fillStyle = this.shapeColor;
       ctx.font = `${Math.round(20 * k + 12)}px sans-serif`;
       ctx.fillText(d._deg + '°', d.fx1 * W + 10, d.fy1 * H - 10);
     }

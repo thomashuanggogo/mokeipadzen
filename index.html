@@ -122,6 +122,23 @@
         <button data-tool="parallelogram" class="tool" title="平行四邊形">▱</button>
         <button data-tool="ellipse" class="tool" title="橢圓">⭕</button>
         <button data-tool="axes" class="tool" title="座標軸：原點在中央（再點一次按鈕＝原點改到左下角）"><svg width="26" height="26" viewBox="0 0 48 48" aria-hidden="true"><g stroke="#495057" stroke-width="3.4" stroke-linecap="round" fill="none"><path d="M 10 5 V 38 H 43"/></g><path d="M 10 3 L 5.8 11 L 14.2 11 Z" fill="#495057"/><path d="M 45 38 L 37 33.8 L 37 42.2 Z" fill="#495057"/><g stroke="#adb5bd" stroke-width="2"><line x1="10" y1="27" x2="34" y2="27" stroke-dasharray="1 6" stroke-linecap="round"/><line x1="21" y1="38" x2="21" y2="14" stroke-dasharray="1 6" stroke-linecap="round"/></g></svg></button>
+        <!-- v210：圖形專屬顏色/粗細/線型鈕（學長第五件主張）— 與筆那顆顏色鈕完全獨立，各記各的 -->
+        <div id="shape-color-group">
+          <button id="btn-shape-color" class="tool" title="圖形顏色 / 粗細 / 線型"><span id="shape-color-dot"></span></button>
+          <div id="shape-color-pop" class="hidden">
+            <div id="shape-colors"></div>
+            <div class="pop-row">
+              <label class="lbl">粗細</label>
+              <input type="range" id="shape-width-range" min="2" max="24" value="5">
+              <span id="shape-width-val">5</span>
+            </div>
+            <div class="pop-row">
+              <label class="lbl">線型</label>
+              <button id="btn-dash-solid" class="dash-btn active">實線</button>
+              <button id="btn-dash-dashed" class="dash-btn">虛線</button>
+            </div>
+          </div>
+        </div>
         <button data-tool="text" class="tool" title="文字">🔤</button>
         <button data-tool="laser" class="tool" title="雷射筆（不錄影）">🔴</button>
       </div>
@@ -320,6 +337,8 @@
       <p style="margin:8px 0"><b><svg class="icn" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><rect x="16" y="7" width="26" height="26" rx="4" fill="none" stroke="#adb5bd" stroke-width="3.4"/><rect x="6" y="15" width="26" height="26" rx="4" fill="#fff" stroke="#495057" stroke-width="3.4"/></svg> 複製選取</b>：選好筆跡後，套索旁邊會出現複製鈕，按下去把選中的筆跡複製一份（位置稍微錯開），複製的那份會被選起來，直接拖到想要的位置。按復原可整批退掉。</p>
       <p style="margin:8px 0"><b>🎨 顏色</b>：16 色＋自訂色（彩虹格），點顏色就換。</p>
       <p style="margin:8px 0"><b>━ 粗細</b>：顏色盤下方的滑桿，拖曳調整筆跡粗細；右邊的數字就是目前粗細。畫筆和螢光筆各自記住自己的數字。</p>
+      <p style="margin:8px 0"><b>● 圖形顏色</b>：圖形工具旁邊的圓點鈕，選圖形框線的顏色和粗細；跟筆分開，各記各的。</p>
+      <p style="margin:8px 0"><b>┄ 線型</b>：在圖形顏色盤裡切換實線／虛線，圖形框線照選的線型畫。</p>
       <p style="margin:8px 0"><b>✏️ 畫筆</b>：一般書寫，App 打開的預設工具。</p>
       <p style="margin:8px 0"><b>🖍️ 螢光筆</b>：半透明粗筆，畫重點用。</p>
       <p style="margin:8px 0"><b><svg class="icn" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><rect x="7" y="15" width="34" height="18" rx="4" fill="#ffa8c5"/><rect x="7" y="15" width="15" height="18" rx="4" fill="#e7f5ff"/><rect x="19" y="15" width="3" height="18" fill="#ced4da"/></svg> 橡皮擦</b>：擦掉碰到的筆跡；重播時看得到擦除過程。</p>
