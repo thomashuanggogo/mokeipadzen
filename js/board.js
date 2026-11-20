@@ -397,11 +397,17 @@ class Board {
         if (t < 1) t = 1;
         // v172：新事件不得早於本頁結尾——轉檔課舊筆跡自帶 Doceri 原始時間，
         // 本機時鐘卻從 0 起算，不夾住的話新筆會被蓋到時間軸最前面（兩套時間）。
+        // v208：append 的新筆要「接在」舊結尾之後——tlT 是結束戳，釘在 edge 會讓
+        // 區間變成 [edge−dur, edge]、與前筆重疊且總長不長（無時鐘頁面首筆實測：
+        // 剛打開的轉檔課寫第一筆，總長紋風不動）。改釘 edge＋dur，區間＝
+        // [edge, edge＋dur]，總長正確延長。erase 事件戳維持釘 edge（事件點在結尾）。
         if ((type === 'add' || type === 'erase') && (this._tlPlayhead === null || this._tlPlayhead === undefined)) {
           const edge = Math.round(this._liveEdgeT());
           if (t < edge) {
-            t = edge;
-            tl.clock.base = edge;
+            t = (type === 'add' && data && data.stroke && data.stroke.tlT === undefined)
+              ? edge + Math.round(data.stroke.dur || 0)
+              : edge;
+            tl.clock.base = t;
             if (tl.clock.running) tl.clock.t0 = performance.now();
           }
         }
@@ -791,7 +797,11 @@ class Board {
       for (const ev of pg.tl.events) ev.t -= shift(ev.t);
       if (pg.tl.erased) {
         for (const e of pg.tl.erased) {
-          if (removed.includes(e.stroke)) { e.eraseT = 0; continue; }  // 剛刪的筆不釘住結尾，總長才縮得下來
+          // v208：幽靈帳本一律跟著漣波對映——本次移除的筆也一樣（舊制只把它的
+          // eraseT 歸零、tlT 留在已被移除的舊座標裡；之後任一次漣波拿那個陳舊
+          // tlT 重推 eraseT，總長被重新釘回舊位置：逆序/混合序擦除會留殘值，
+          // 全擦光總長仍不歸零——學長實測）。對映後幽靈塌到被移除區間的起點，
+          // eraseT 恆等於壓縮後座標，任何擦除順序下總長都正確。
           if (e.stroke.tlT) e.stroke.tlT -= shift(e.stroke.tlT);
           e.eraseT = (e.stroke.tlT || 0);
         }
